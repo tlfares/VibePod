@@ -1,3 +1,5 @@
+<p align="center"><img src="icon.png" width="128" alt="VibePod icon"></p>
+
 # VibePod
 Native iOS music player for your own songs. Everything Apple Music keeps for its catalog, on your local files, plus a lot more.
 Local, no account, no ads.
