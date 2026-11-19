@@ -1,0 +1,32 @@
+# macOS
+.DS_Store
+
+# Xcode user-specific state
+xcuserdata/
+project.xcworkspace/xcuserdata/
+*.xcuserstate
+
+# Build products
+DerivedData/
+build/
+Release/
+*.ipa
+*.dSYM.zip
+*.dSYM
+
+# Swift Package Manager
+.build/
+.swiftpm/
+
+# Discord Social SDK: licensed by Discord, download it yourself (see README)
+Frameworks/discord_partner_sdk.xcframework/
+
+# Local tooling
+.claude/
+/main
+/project.yml
+
+# Misc
+*.moved-aside
+*.swp
+*.tmp

@@ -1,0 +1,107 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+	<key>CFBundleDevelopmentRegion</key>
+	<string>$(DEVELOPMENT_LANGUAGE)</string>
+	<key>CFBundleDisplayName</key>
+	<string>VibePod</string>
+	<key>CFBundleExecutable</key>
+	<string>$(EXECUTABLE_NAME)</string>
+	<key>CFBundleIdentifier</key>
+	<string>$(PRODUCT_BUNDLE_IDENTIFIER)</string>
+	<key>CFBundleInfoDictionaryVersion</key>
+	<string>6.0</string>
+	<key>CFBundleName</key>
+	<string>$(PRODUCT_NAME)</string>
+	<key>CFBundlePackageType</key>
+	<string>APPL</string>
+	<key>CFBundleShortVersionString</key>
+	<string>1.0</string>
+	<key>CFBundleURLTypes</key>
+	<array>
+		<dict>
+			<key>CFBundleURLName</key>
+			<string>com.fares.lrc.player.widgets</string>
+			<key>CFBundleURLSchemes</key>
+			<array>
+				<string>lrcplayer</string>
+				<string>discord-1565851662101254224</string>
+			</array>
+		</dict>
+	</array>
+	<key>CFBundleVersion</key>
+	<string>10</string>
+	<key>INIntentsSupported</key>
+	<array>
+		<string>INPlayMediaIntent</string>
+	</array>
+	<key>INSupportedMediaCategories</key>
+	<array>
+		<string>INMediaCategoryMusic</string>
+	</array>
+	<key>ITSAppUsesNonExemptEncryption</key>
+	<false/>
+	<key>LSApplicationQueriesSchemes</key>
+	<array>
+		<string>discord</string>
+	</array>
+	<key>LSSupportsOpeningDocumentsInPlace</key>
+	<true/>
+	<key>MusicHapticsSupported</key>
+	<true/>
+	<key>NSAppleMusicUsageDescription</key>
+	<string>Play the music library synced to this iPhone.</string>
+	<key>NSBonjourServices</key>
+	<array>
+		<string>_lrcplayer-xfer._tcp</string>
+		<string>_lrcplayer-xfer._udp</string>
+	</array>
+	<key>NSDocumentsFolderUsageDescription</key>
+	<string>Allow importing music files from the Files app</string>
+	<key>NSHealthUpdateUsageDescription</key>
+	<string>VibePod doesn't write to Health. It only reads your workouts to find the music you play while you exercise.</string>
+	<key>NSHealthShareUsageDescription</key>
+	<string>VibePod reads your workouts to find the music you play while you exercise. Nothing leaves your iPhone.</string>
+	<key>NSLocalNetworkUsageDescription</key>
+	<string>Send songs to your other devices nearby, and receive them.</string>
+	<key>NSMotionUsageDescription</key>
+	<string>Your AirPods' motion lets you control the music by nodding, shaking or tilting your head.</string>
+	<key>NSMicrophoneUsageDescription</key>
+	<string>Talk to the assistant: ask for music hands-free.</string>
+	<key>NSPhotoLibraryUsageDescription</key>
+	<string>To use album artwork from your photos</string>
+	<key>NSSiriUsageDescription</key>
+	<string>Play your music when you ask Siri.</string>
+	<key>NSSpeechRecognitionUsageDescription</key>
+	<string>Understand what you ask the assistant out loud.</string>
+	<key>UIBackgroundModes</key>
+	<array>
+		<string>audio</string>
+	</array>
+	<key>UIFileSharingEnabled</key>
+	<true/>
+	<key>UILaunchScreen</key>
+	<dict>
+		<key>UIColorName</key>
+		<string>LaunchScreenBackground</string>
+	</dict>
+	<key>UIRequiredDeviceCapabilities</key>
+	<array>
+		<string>arm64</string>
+	</array>
+	<key>UISupportedInterfaceOrientations</key>
+	<array>
+		<string>UIInterfaceOrientationPortrait</string>
+		<string>UIInterfaceOrientationLandscapeLeft</string>
+		<string>UIInterfaceOrientationLandscapeRight</string>
+	</array>
+	<key>UISupportedInterfaceOrientations~ipad</key>
+	<array>
+		<string>UIInterfaceOrientationPortrait</string>
+		<string>UIInterfaceOrientationPortraitUpsideDown</string>
+		<string>UIInterfaceOrientationLandscapeLeft</string>
+		<string>UIInterfaceOrientationLandscapeRight</string>
+	</array>
+</dict>
+</plist>

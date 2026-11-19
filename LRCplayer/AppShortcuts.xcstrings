@@ -1,0 +1,359 @@
+{
+  "sourceLanguage" : "en",
+  "strings" : {
+    "Ask ${applicationName}" : {
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringSet" : {
+            "state" : "new",
+            "values" : [
+              "Ask ${applicationName}",
+              "Ask the ${applicationName} assistant"
+            ]
+          }
+        },
+        "fr" : {
+          "stringSet" : {
+            "state" : "needs_review",
+            "values" : [
+              "Demande à ${applicationName}"
+            ]
+          }
+        }
+      }
+    },
+    "Ask the ${applicationName} assistant" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "fr" : {
+          "stringSet" : {
+            "state" : "translated",
+            "values" : [
+              "Demande à l’assistant ${applicationName}",
+              "Parle à l’assistant de ${applicationName}"
+            ]
+          }
+        }
+      }
+    },
+    "Find a song by lyrics in ${applicationName}" : {
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringSet" : {
+            "state" : "new",
+            "values" : [
+              "Find a song by lyrics in ${applicationName}",
+              "What's that song in ${applicationName}"
+            ]
+          }
+        },
+        "fr" : {
+          "stringSet" : {
+            "state" : "needs_review",
+            "values" : [
+              "Trouve une chanson par les paroles dans ${applicationName}",
+              "Cherche une chanson par ses paroles dans ${applicationName}"
+            ]
+          }
+        }
+      }
+    },
+    "More from this artist in ${applicationName}" : {
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringSet" : {
+            "state" : "new",
+            "values" : [
+              "More from this artist in ${applicationName}",
+              "Play more like this in ${applicationName}"
+            ]
+          }
+        },
+        "fr" : {
+          "stringSet" : {
+            "state" : "needs_review",
+            "values" : [
+              "Plus de cet artiste dans ${applicationName}",
+              "Encore de cet artiste dans ${applicationName}"
+            ]
+          }
+        }
+      }
+    },
+    "My stats in ${applicationName}" : {
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringSet" : {
+            "state" : "new",
+            "values" : [
+              "My stats in ${applicationName}",
+              "What did I listen to in ${applicationName}"
+            ]
+          }
+        },
+        "fr" : {
+          "stringSet" : {
+            "state" : "needs_review",
+            "values" : [
+              "Mes stats dans ${applicationName}",
+              "Mes statistiques d’écoute dans ${applicationName}"
+            ]
+          }
+        }
+      }
+    },
+    "Play ${genre} in ${applicationName}" : {
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringSet" : {
+            "state" : "new",
+            "values" : [
+              "Play ${genre} in ${applicationName}",
+              "Put on some ${genre} in ${applicationName}"
+            ]
+          }
+        },
+        "fr" : {
+          "stringSet" : {
+            "state" : "needs_review",
+            "values" : [
+              "Lance du ${genre} dans ${applicationName}",
+              "Joue du ${genre} dans ${applicationName}"
+            ]
+          }
+        }
+      }
+    },
+    "Play ${mix} in ${applicationName}" : {
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringSet" : {
+            "state" : "new",
+            "values" : [
+              "Play ${mix} in ${applicationName}",
+              "Play my ${mix} in ${applicationName}"
+            ]
+          }
+        },
+        "fr" : {
+          "stringSet" : {
+            "state" : "needs_review",
+            "values" : [
+              "Lance ${mix} dans ${applicationName}",
+              "Joue ${mix} dans ${applicationName}"
+            ]
+          }
+        }
+      }
+    },
+    "Play ${playlist} in ${applicationName}" : {
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringSet" : {
+            "state" : "new",
+            "values" : [
+              "Play ${playlist} in ${applicationName}",
+              "Shuffle ${playlist} in ${applicationName}"
+            ]
+          }
+        },
+        "fr" : {
+          "stringSet" : {
+            "state" : "needs_review",
+            "values" : [
+              "Lance ${playlist} dans ${applicationName}",
+              "Joue ${playlist} dans ${applicationName}",
+              "Mets ${playlist} dans ${applicationName}"
+            ]
+          }
+        }
+      }
+    },
+    "Play more like this in ${applicationName}" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "fr" : {
+          "stringSet" : {
+            "state" : "translated",
+            "values" : [
+              "Joue plus de ce genre dans ${applicationName}",
+              "Mets-en d’autres comme ça dans ${applicationName}"
+            ]
+          }
+        }
+      }
+    },
+    "Play my ${mix} in ${applicationName}" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "fr" : {
+          "stringSet" : {
+            "state" : "translated",
+            "values" : [
+              "Lance mes ${mix} dans ${applicationName}",
+              "Mets mes ${mix} dans ${applicationName}"
+            ]
+          }
+        }
+      }
+    },
+    "Put on some ${genre} in ${applicationName}" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "fr" : {
+          "stringSet" : {
+            "state" : "translated",
+            "values" : [
+              "Mets du ${genre} dans ${applicationName}"
+            ]
+          }
+        }
+      }
+    },
+    "Show the lyrics in ${applicationName}" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "fr" : {
+          "stringSet" : {
+            "state" : "translated",
+            "values" : [
+              "Affiche les paroles dans ${applicationName}",
+              "Montre les paroles dans ${applicationName}"
+            ]
+          }
+        }
+      }
+    },
+    "Shuffle ${applicationName}" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "fr" : {
+          "stringSet" : {
+            "state" : "translated",
+            "values" : [
+              "Mélange ${applicationName}",
+              "Lecture aléatoire dans ${applicationName}"
+            ]
+          }
+        }
+      }
+    },
+    "Shuffle ${playlist} in ${applicationName}" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "fr" : {
+          "stringSet" : {
+            "state" : "translated",
+            "values" : [
+              "Mélange ${playlist} dans ${applicationName}",
+              "Lance ${playlist} en aléatoire dans ${applicationName}"
+            ]
+          }
+        }
+      }
+    },
+    "Shuffle my library in ${applicationName}" : {
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringSet" : {
+            "state" : "new",
+            "values" : [
+              "Shuffle my library in ${applicationName}",
+              "Shuffle ${applicationName}"
+            ]
+          }
+        },
+        "fr" : {
+          "stringSet" : {
+            "state" : "needs_review",
+            "values" : [
+              "Mélange ma bibliothèque dans ${applicationName}",
+              "Lance ma bibliothèque en aléatoire dans ${applicationName}"
+            ]
+          }
+        }
+      }
+    },
+    "Talk to ${applicationName}" : {
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringSet" : {
+            "state" : "new",
+            "values" : [
+              "Talk to ${applicationName}"
+            ]
+          }
+        },
+        "fr" : {
+          "stringSet" : {
+            "state" : "needs_review",
+            "values" : [
+              "Parle à ${applicationName}",
+              "Discute avec ${applicationName}"
+            ]
+          }
+        }
+      }
+    },
+    "What are they singing in ${applicationName}" : {
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringSet" : {
+            "state" : "new",
+            "values" : [
+              "What are they singing in ${applicationName}",
+              "Show the lyrics in ${applicationName}"
+            ]
+          }
+        },
+        "fr" : {
+          "stringSet" : {
+            "state" : "needs_review",
+            "values" : [
+              "Qu’est-ce qu’ils chantent dans ${applicationName}",
+              "Qu’est-ce qu’il chante dans ${applicationName}"
+            ]
+          }
+        }
+      }
+    },
+    "What did I listen to in ${applicationName}" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "fr" : {
+          "stringSet" : {
+            "state" : "translated",
+            "values" : [
+              "Qu’est-ce que j’ai écouté dans ${applicationName}"
+            ]
+          }
+        }
+      }
+    },
+    "What's that song in ${applicationName}" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "fr" : {
+          "stringSet" : {
+            "state" : "translated",
+            "values" : [
+              "C’est quoi cette chanson dans ${applicationName}",
+              "Quelle est cette chanson dans ${applicationName}"
+            ]
+          }
+        }
+      }
+    }
+  },
+  "version" : "1.0"
+}
