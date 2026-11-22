@@ -36,7 +36,9 @@ Local, no account, no ads.
   - YouTube Data API, for music videos
 
 ## Install
-Grab the .ipa from [Releases](https://github.com/tlfares/VibePod/releases) and sideload it (AltStore, SideStore, Sideloadly…). You can also build it from source with Xcode.
+Join the beta on [TestFlight](https://testflight.apple.com/join/V6ZZX137).
+
+Or grab the .ipa from [Releases](https://github.com/tlfares/VibePod/releases) and sideload it (AltStore, SideStore, Sideloadly…). You can also build it from source with Xcode.
 
 The Discord SDK isn't in the repo, because Discord owns its license. To build with it:
 1. Download it from the [Discord Developer Portal](https://discord.com/developers/docs/discord-social-sdk/getting-started).
