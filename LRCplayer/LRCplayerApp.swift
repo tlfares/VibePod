@@ -6,6 +6,7 @@ struct LRCplayerApp: App {
     @UIApplicationDelegateAdaptor private var appDelegate: AppDelegate
 
     init() {
+        MacApp.useBlackBackground()
         AppTint.adoptInfusedOnce()
         AppAppearance.startApplying()
         MusicHapticsService.shared.start()
@@ -17,14 +18,18 @@ struct LRCplayerApp: App {
         WindowGroup {
             ContentView()
         }
+        .commands { VibePodCommands() }
     }
 }
 
 final class AppDelegate: NSObject, UIApplicationDelegate {
     func application(_ application: UIApplication, didFinishLaunchingWithOptions launchOptions: [UIApplication.LaunchOptionsKey: Any]? = nil) -> Bool {
-        if INPreferences.siriAuthorizationStatus() == .notDetermined {
+        // No Siri on the Mac app (it isn't entitled to it).
+        if !MacApp.isActive, INPreferences.siriAuthorizationStatus() == .notDetermined {
             INPreferences.requestSiriAuthorization { _ in }
         }
+        // Silent pushes from iCloud when another device changes something.
+        application.registerForRemoteNotifications()
         return true
     }
 
@@ -39,6 +44,7 @@ final class AppDelegate: NSObject, UIApplicationDelegate {
     func application(_ application: UIApplication, supportedInterfaceOrientationsFor window: UIWindow?) -> UIInterfaceOrientationMask {
         guard !OrientationLock.isPortrait, let screen = window?.windowScene?.screen else { return .portrait }
         if LargeScreen.contains(screen.bounds.size) { return .all }
+        if OrientationLock.isVideoFullScreen { return .allButUpsideDown }
         return OrientationLock.isPlayerOpen && OrientationLock.playerRotates ? .allButUpsideDown : .portrait
     }
 }
@@ -52,6 +58,11 @@ enum OrientationLock {
     /// The full screen player turns sideways on a phone too.
     @MainActor static var isPlayerOpen = false {
         didSet { if isPlayerOpen != oldValue { refresh() } }
+    }
+
+    /// A music video full screen turns with the phone, whatever the setting.
+    @MainActor static var isVideoFullScreen = false {
+        didSet { if isVideoFullScreen != oldValue { refresh() } }
     }
 
     static let playerRotationKey = "playerRotatesOnPhone"
@@ -73,7 +84,7 @@ enum OrientationLock {
                 while let presented = controller?.presentedViewController { controller = presented }
                 controller?.setNeedsUpdateOfSupportedInterfaceOrientations()
             }
-            let mustStandUp = isPortrait || !((isPlayerOpen && playerRotates) || LargeScreen.contains(scene.screen.bounds.size))
+            let mustStandUp = isPortrait || !(isVideoFullScreen || (isPlayerOpen && playerRotates) || LargeScreen.contains(scene.screen.bounds.size))
             if mustStandUp, scene.effectiveGeometry.interfaceOrientation.isLandscape {
                 scene.requestGeometryUpdate(.iOS(interfaceOrientations: .portrait))
             }

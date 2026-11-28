@@ -78,6 +78,7 @@ enum WordSyncStore {
         try FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
         let file = File(fingerprint: fingerprint(of: lyrics.lines), lines: lines, source: source)
         try JSONEncoder().encode(file).write(to: url(for: songID), options: .atomic)
+        setRemoved(false, for: songID)
         NotificationCenter.default.post(name: didChangeNotification, object: songID)
     }
 
@@ -89,12 +90,44 @@ enum WordSyncStore {
     static func setRawData(_ data: Data, for songID: UUID) {
         try? FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
         guard (try? data.write(to: url(for: songID), options: .atomic)) != nil else { return }
+        setRemoved(false, for: songID)
         NotificationCenter.default.post(name: didChangeNotification, object: songID)
     }
 
+    /// Deleted by hand: said so to the other devices (iCloud Sync never
+    /// takes timings that are just missing for a deletion, and would bring
+    /// them back).
     static func delete(for songID: UUID) {
         try? FileManager.default.removeItem(at: url(for: songID))
+        setRemoved(true, for: songID)
         setHidden(false, for: songID)
+    }
+
+    /// iCloud Sync: the timings deleted by hand on another device.
+    static func removeRawData(for songID: UUID) {
+        setRemoved(true, for: songID)
+        guard (try? FileManager.default.removeItem(at: url(for: songID))) != nil else { return }
+        NotificationCenter.default.post(name: didChangeNotification, object: songID)
+    }
+
+    // MARK: Removed
+
+    /// What iCloud Sync carries for timings deleted by hand.
+    struct RemovalMarker: Codable {
+        var removed = true
+    }
+
+    private static let removedKey = "wordSyncRemovedByHand"
+
+    static func isRemoved(for songID: UUID) -> Bool {
+        UserDefaults.standard.stringArray(forKey: removedKey)?.contains(songID.uuidString) == true
+    }
+
+    private static func setRemoved(_ removed: Bool, for songID: UUID) {
+        guard isRemoved(for: songID) != removed else { return }
+        var songs = Set(UserDefaults.standard.stringArray(forKey: removedKey) ?? [])
+        if removed { songs.insert(songID.uuidString) } else { songs.remove(songID.uuidString) }
+        UserDefaults.standard.set(songs.sorted(), forKey: removedKey)
     }
 
     // MARK: Hidden
@@ -162,7 +195,7 @@ final class WordSyncGenerator: ObservableObject {
         failures[songID] = nil
     }
 
-    func sync(_ song: Song, lyrics: LRCLyrics) {
+    func sync(_ song: Song, lyrics: LRCLyrics, in library: LibraryService) {
         guard stages[song.id] == nil else { return }
         failures[song.id] = nil
         guard AIFeatures.isAvailable, let key = AIFeatures.apiKey else {
@@ -176,7 +209,12 @@ final class WordSyncGenerator: ObservableObject {
         stages[song.id] = .preparing
         Task {
             do {
-                let chunks = try await LyricsGenerator.audioChunks(at: song.playableFileURL, duration: song.duration)
+                guard await SubsonicDownloads.shared.ensureLocal(song) else {
+                    failures[song.id] = String(localized: "Couldn't download “\(song.title)”")
+                    stages[song.id] = nil
+                    return
+                }
+                let chunks = try await LyricsGenerator.audioChunks(for: song)
                 defer { chunks.filter(\.isTemporary).forEach { try? FileManager.default.removeItem(at: $0.url) } }
 
                 stages[song.id] = .transcribing(part: 0, of: chunks.count)
@@ -185,14 +223,30 @@ final class WordSyncGenerator: ObservableObject {
                 }
 
                 stages[song.id] = .matching
-                let heard = LyricsGenerator.sungWords(in: transcribed).map {
+                let sung = LyricsGenerator.sungWords(in: transcribed)
+                let heard = sung.map {
                     // Playback time to the lyrics' clock.
                     TimedWord(text: $0.text, start: $0.start + lyrics.offset, end: $0.end + lyrics.offset)
                 }
-                let timings = try await Task.detached(priority: .userInitiated) {
-                    try Self.timings(for: lyrics.lines, heard: heard)
+                // Line times found online are often far off: the vocals can
+                // move them, or time the text again from scratch.
+                let origin = LyricsGenerator.TextOrigin.existing(source: LyricsGenerator.textSource(for: library.song(withID: song.id) ?? song))
+                let retimed = await Task.detached(priority: .userInitiated) {
+                    Self.retimedLRC(lyrics, heard: sung, for: song, origin: origin)
                 }.value
-                try WordSyncStore.save(timings, for: song.id, lyrics: lyrics)
+                if let retimed {
+                    if let original = library.song(withID: song.id)?.lrcFilePath,
+                       !LyricsGenerator.isGenerated(storedPath: original) {
+                        LyricsGenerator.setOriginal(original, for: song.id)
+                    }
+                    try LyricsGenerator.shared.save(retimed.content, for: song, in: library)
+                    try WordSyncStore.save(retimed.timings, for: song.id, lyrics: retimed.lyrics)
+                } else {
+                    let timings = try await Task.detached(priority: .userInitiated) {
+                        try Self.timings(for: lyrics.lines, heard: heard)
+                    }.value
+                    try WordSyncStore.save(timings, for: song.id, lyrics: lyrics)
+                }
                 if LyricsSummaries.shared.summary(for: song.id) == nil { LyricsSummaries.shared.summarizeSoon(song) }
             } catch {
                 failures[song.id] = error.localizedDescription
@@ -217,7 +271,12 @@ final class WordSyncGenerator: ObservableObject {
         stages[song.id] = .preparing
         Task {
             do {
-                let chunks = try await LyricsGenerator.audioChunks(at: song.playableFileURL, duration: song.duration)
+                guard await SubsonicDownloads.shared.ensureLocal(song) else {
+                    failures[song.id] = String(localized: "Couldn't download “\(song.title)”")
+                    stages[song.id] = nil
+                    return
+                }
+                let chunks = try await LyricsGenerator.audioChunks(for: song)
                 defer { chunks.filter(\.isTemporary).forEach { try? FileManager.default.removeItem(at: $0.url) } }
                 stages[song.id] = .transcribing(part: 0, of: chunks.count)
                 let transcribed = try await LyricsGenerator.transcribe(chunks, key: key) { done in
@@ -226,6 +285,7 @@ final class WordSyncGenerator: ObservableObject {
                 stages[song.id] = .matching
                 let heard = LyricsGenerator.sungWords(in: transcribed)
                 guard let first = heard.first, let last = heard.last else { throw SyncError.poorMatch }
+                let origin = LyricsGenerator.TextOrigin.existing(source: LyricsGenerator.textSource(for: library.song(withID: song.id) ?? song))
                 let content = try await Task.detached(priority: .userInitiated) {
                     let starts = Self.plainLineStarts(texts, heard: heard)
                     var lines: [LyricsGenerator.Line] = []
@@ -233,7 +293,7 @@ final class WordSyncGenerator: ObservableObject {
                         let next = index + 1 < starts.count ? starts[index + 1] : last.end
                         lines.append(.init(text: text, start: starts[index], end: max(starts[index], min(next - 0.1, starts[index] + 8))))
                     }
-                    return LyricsGenerator.lrc(lines: lines, for: song)
+                    return LyricsGenerator.lrc(lines: lines, for: song, origin: origin)
                 }.value
                 // Delete AI Lyrics brings these back.
                 if let original = library.song(withID: song.id)?.lrcFilePath {
@@ -256,17 +316,60 @@ final class WordSyncGenerator: ObservableObject {
         }
     }
 
+    /// New line times when the vocals disagree with the file's: its times
+    /// moved to the words heard, or the text timed again as if it had
+    /// none, whichever the vocals match best. Nil when the file's own
+    /// times match about as well (they're kept, breaks and all).
+    nonisolated static func retimedLRC(_ lyrics: LRCLyrics, heard: [TimedWord], for song: Song, origin: LyricsGenerator.TextOrigin) -> (content: String, lyrics: LRCLyrics, timings: [[WordTiming]])? {
+        guard let last = heard.last else { return nil }
+        // Everything on the playback clock: the new file has no offset.
+        let fileLines = lyrics.lines.map { LyricsLine(time: $0.time - lyrics.offset, text: $0.text) }
+        let sung = fileLines.filter { !$0.isInstrumentalGap }
+        let texts = sung.map(\.text)
+        guard texts.count >= 2 else { return nil }
+
+        let kept = matchedShare(fileLines, heard: heard)
+        let candidates = [
+            plainLineStarts(texts, heard: heard, seeds: sung.map(\.time)),
+            plainLineStarts(texts, heard: heard)
+        ].map { starts -> (content: String, lyrics: LRCLyrics, share: Double) in
+            var lines: [LyricsGenerator.Line] = []
+            for (index, text) in texts.enumerated() {
+                let next = index + 1 < starts.count ? starts[index + 1] : last.end
+                lines.append(.init(text: text, start: starts[index], end: max(starts[index], min(next - 0.1, starts[index] + 8))))
+            }
+            let content = LyricsGenerator.lrc(lines: lines, for: song, origin: origin)
+            let parsed = LRCParser.parse(content: content)
+            return (content, parsed, matchedShare(parsed.lines, heard: heard))
+        }
+        guard let best = candidates.max(by: { $0.share < $1.share }),
+              best.share >= minimumMatchedShare,
+              best.share > kept + 0.05,
+              let timings = try? timings(for: best.lyrics.lines, heard: heard) else { return nil }
+        return (best.content, best.lyrics, timings)
+    }
+
+    /// The share of the lyrics' words found in the vocals while their line
+    /// is sung (0 when too few to sync).
+    nonisolated static func matchedShare(_ lines: [LyricsLine], heard: [TimedWord]) -> Double {
+        var share = 0.0
+        _ = try? timings(for: lines, heard: heard, matched: { share = $0 })
+        return share
+    }
+
     /// Each line's start: spread by length over the vocals, then matched to
     /// the words heard in narrowing windows. Lines nothing anchored sit
     /// between their neighbours.
-    nonisolated static func plainLineStarts(_ texts: [String], heard: [TimedWord]) -> [TimeInterval] {
-        guard let first = heard.first, let last = heard.last else { return texts.map { _ in 0 } }
+    /// With `seeds` (the file's own times), lines start there instead, and
+    /// those nothing anchored move with their neighbours.
+    nonisolated static func plainLineStarts(_ texts: [String], heard: [TimedWord], seeds: [TimeInterval]? = nil) -> [TimeInterval] {
+        guard let first = heard.first, let last = heard.last else { return seeds ?? texts.map { _ in 0 } }
         let weights = texts.map { Double(max(1, $0.count)) }
         let total = weights.reduce(0, +)
         var cumulative = [0.0]
         for weight in weights { cumulative.append(cumulative.last! + weight) }
-        var starts = texts.indices.map { first.start + (last.end - first.start) * cumulative[$0] / total }
-        for slack in [40.0, 15, 6, 3] {
+        var starts = seeds ?? texts.indices.map { first.start + (last.end - first.start) * cumulative[$0] / total }
+        for slack in seeds == nil ? [40.0, 15, 6, 3] : [20.0, 8, 3] {
             let lines = zip(texts, starts).map { LyricsLine(time: $1, text: $0) }
             var anchored: [Int: TimeInterval] = [:]
             _ = try? timings(for: lines, heard: heard, slack: slack) { anchored = $0 }
@@ -277,6 +380,33 @@ final class WordSyncGenerator: ObservableObject {
                 guard let time = anchored[index] else { continue }
                 if let previous = kept.last, time <= previous.time { continue }
                 kept.append((index, time))
+            }
+            if seeds != nil {
+                // Unanchored lines keep their spacing, shifted like the
+                // anchored lines around them.
+                let previous = starts
+                for index in texts.indices {
+                    let before = kept.last { $0.index <= index }
+                    let after = kept.first { $0.index >= index }
+                    let shiftBefore = before.map { $0.time - previous[$0.index] }
+                    let shiftAfter = after.map { $0.time - previous[$0.index] }
+                    switch (before, after) {
+                    case let (b?, a?) where a.index != b.index:
+                        let span = max(0.001, previous[a.index] - previous[b.index])
+                        let share = min(1, max(0, (previous[index] - previous[b.index]) / span))
+                        starts[index] = previous[index] + shiftBefore! + (shiftAfter! - shiftBefore!) * share
+                    case (_?, _):
+                        starts[index] = previous[index] + shiftBefore!
+                    case (nil, _?):
+                        starts[index] = previous[index] + shiftAfter!
+                    case (nil, nil):
+                        break
+                    }
+                }
+                for index in starts.indices.dropFirst() where starts[index] < starts[index - 1] {
+                    starts[index] = starts[index - 1]
+                }
+                continue
             }
             for index in texts.indices {
                 let before = kept.last { $0.index <= index }
@@ -306,7 +436,7 @@ final class WordSyncGenerator: ObservableObject {
     nonisolated static let minimumMatchedShare = 0.35
 
     /// One timing per word of every line (none for instrumental breaks).
-    nonisolated static func timings(for lines: [LyricsLine], heard: [TimedWord], slack: TimeInterval = 2, anchors: ((_ starts: [Int: TimeInterval]) -> Void)? = nil) throws -> [[WordTiming]] {
+    nonisolated static func timings(for lines: [LyricsLine], heard: [TimedWord], slack: TimeInterval = 2, anchors: ((_ starts: [Int: TimeInterval]) -> Void)? = nil, matched matchedShare: ((Double) -> Void)? = nil) throws -> [[WordTiming]] {
         struct Token {
             var line: Int
             var key: String
@@ -359,6 +489,7 @@ final class WordSyncGenerator: ObservableObject {
                 j -= 1
             }
         }
+        matchedShare?(Double(matched.compactMap { $0 }.count) / Double(n))
         guard Double(matched.compactMap { $0 }.count) >= Double(n) * minimumMatchedShare else { throw SyncError.poorMatch }
         if let anchors {
             // Per line, where its first matched word was heard, moved back

@@ -18,7 +18,7 @@ enum AssistantEngineChoice: String, CaseIterable, Identifiable {
         switch self {
         case .automatic: String(localized: "Automatic")
         case .apple: "Apple Intelligence"
-        case .mistral: "Mistral"
+        case .mistral: AIProvider.current.name
         }
     }
 
@@ -27,7 +27,7 @@ enum AssistantEngineChoice: String, CaseIterable, Identifiable {
         switch self {
         case .automatic: "Auto"
         case .apple: "Apple AI"
-        case .mistral: "Mistral"
+        case .mistral: AIProvider.current.name
         }
     }
 
@@ -43,7 +43,7 @@ enum AssistantEngineKind: String, Sendable {
     var title: String {
         switch self {
         case .onDevice: "Apple Intelligence · On Device"
-        case .mistral: "Mistral"
+        case .mistral: AIProvider.current.name
         }
     }
 }
@@ -423,10 +423,10 @@ private extension String {
 struct MistralEngine: AssistantEngine {
     let key: String
     var kind: AssistantEngineKind { .mistral }
-    var budget: AssistantLibrary.Budget { .full }
+    var budget: AssistantLibrary.Budget { AIProvider.current.assistantBudget }
 
     /// Best first.
-    static let models = ["mistral-medium-latest", "mistral-small-latest", "ministral-14b-latest", "ministral-8b-latest"]
+    static var models: [String] { AIProvider.current.strongModels }
 
     func plan(for prompt: AssistantPrompt) async throws -> AssistantPlan {
         var messages: [[String: String]] = [
@@ -437,21 +437,31 @@ struct MistralEngine: AssistantEngine {
             messages.append(["role": "assistant", "content": turn.assistant])
         }
         messages.append(["role": "user", "content": AssistantInstructions.userText(for: prompt, includeHistory: false)])
+        if AIProvider.current == .groq {
+            // Past replies are plain text, and gpt-oss tends to copy them.
+            messages[0]["content", default: ""] += "\n\nAlways answer with the JSON object only, even when earlier replies look like plain text."
+        }
 
         var lastError: Error = MistralError.modelUnavailable
+        // The best model's reason is the one worth showing.
+        var firstError: Error?
         for model in MistralModelMemory.usable(Self.models) {
             do {
                 return try await request(model: model, messages: messages)
             } catch MistralError.invalidKey {
                 throw MistralError.invalidKey
+            } catch MistralError.noSubscription {
+                // The account, not the model: the others won't do better.
+                throw MistralError.noSubscription
             } catch MistralError.modelUnavailable {
                 MistralModelMemory.skip(model)
                 lastError = MistralError.modelUnavailable
             } catch {
                 lastError = error
+                if firstError == nil { firstError = error }
             }
         }
-        throw lastError
+        throw firstError ?? lastError
     }
 
     /// `retriesBrokenAnswer`: an answer whose JSON falls apart midway is
@@ -460,9 +470,10 @@ struct MistralEngine: AssistantEngine {
         var body: [String: Any] = [
             "model": model,
             "temperature": 0.5,
-            "max_tokens": 4000,
+            "max_tokens": AIProvider.current.assistantMaxTokens,
             "messages": messages
         ]
+        body.merge(AIProvider.extras(for: model)) { $1 }
         if MistralModelMemory.schemaUnsupported {
             body["response_format"] = ["type": "json_object"]
             var withSchema = messages
@@ -478,7 +489,7 @@ struct MistralEngine: AssistantEngine {
             ]
         }
 
-        var request = URLRequest(url: URL(string: "https://api.mistral.ai/v1/chat/completions")!)
+        var request = URLRequest(url: MistralClient.chatURL)
         request.httpMethod = "POST"
         request.timeoutInterval = 60
         request.setValue("Bearer \(key)", forHTTPHeaderField: "Authorization")
@@ -489,6 +500,11 @@ struct MistralEngine: AssistantEngine {
         let data: Data
         do {
             (data, _) = try await MistralClient.send(request, retryingOnce: true)
+        } catch let MistralError.unvalidatedAnswer(answer) {
+            // Groq checks the schema itself and turns down an answer that
+            // strays from it; what the model wrote is usually still usable.
+            // Asking again would only spend the minute's tokens.
+            return try await plan(from: answer, model: model, messages: messages, retriesBrokenAnswer: false)
         } catch let MistralError.server(message) where !MistralModelMemory.schemaUnsupported
             && (message.localizedCaseInsensitiveContains("schema") || message.localizedCaseInsensitiveContains("response_format")) {
             // A model without structured outputs: JSON mode, schema in the prompt.
@@ -503,10 +519,19 @@ struct MistralEngine: AssistantEngine {
         guard let raw = try JSONDecoder().decode(Response.self, from: data).choices.first?.message.content else {
             throw AssistantEngineError.unreadableAnswer
         }
+        return try await plan(from: raw, model: model, messages: messages, retriesBrokenAnswer: retriesBrokenAnswer)
+    }
+
+    private func plan(from raw: String, model: String, messages: [[String: String]], retriesBrokenAnswer: Bool) async throws -> AssistantPlan {
         // The last answer as sent, to see what the model really asked for.
         let folder = URL.applicationSupportDirectory.appending(path: "Assistant")
         try? FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
         try? raw.write(to: folder.appending(path: "last-answer.txt"), atomically: true, encoding: .utf8)
+        // No JSON at all: the model just wrote its reply. Kept as is.
+        let plain = raw.trimmingCharacters(in: .whitespacesAndNewlines)
+        if !plain.isEmpty, !plain.contains("{") {
+            return AssistantPlan(reply: plain)
+        }
         var content = raw
         // Some models wrap JSON in a code fence anyway.
         if let start = content.firstIndex(of: "{"), let end = content.lastIndex(of: "}") {
@@ -592,7 +617,7 @@ actor MistralPacer {
     private var last = Date.distantPast
 
     func waitTurn() async {
-        let wait = 1.15 - Date().timeIntervalSince(last)
+        let wait = AIProvider.current.spacing - Date().timeIntervalSince(last)
         if wait > 0 { try? await Task.sleep(for: .seconds(wait)) }
         last = Date()
     }

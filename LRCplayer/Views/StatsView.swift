@@ -759,6 +759,9 @@ private struct ListeningStatsSection: View {
     @EnvironmentObject private var libraryVM: LibraryViewModel
     @State private var isEnabled = ListeningStatsService.shared.isEnabled
     @State private var range = ListeningStatsTimeRange.week
+    /// With imported plays shown separately: which ones.
+    @State private var source = ListeningStatsService.Source.vibePod
+    @State private var showsSources = ListeningStatsSection.sourcesShown
     @State private var stats = ListeningStatsAggregated.empty
     @State private var entryCount = 0
     @State private var confirmsEnable = false
@@ -769,6 +772,8 @@ private struct ListeningStatsSection: View {
     @State private var showsAllArtists = false
     @State private var showsAllGenres = false
     @State private var showsAllWorkoutSongs = false
+    /// nil: every kind of workout.
+    @State private var workoutActivity: String?
     @State private var showsYears = true
     @State private var extras = ListeningExtras.empty
 
@@ -777,11 +782,14 @@ private struct ListeningStatsSection: View {
     var body: some View {
         VStack(spacing: 16) {
             if isEnabled {
-                GlassSegmentedPicker("Period", options: ListeningStatsTimeRange.allCases.filter { $0 != .allTime || service.hasMoreThanAYear }, selection: Binding(get: { range }, set: show), title: \.label)
+                if showsSources {
+                    GlassSegmentedPicker("Source", options: [ListeningStatsService.Source.vibePod, .imported], selection: Binding(get: { source }, set: showSource), title: { $0 == .vibePod ? "VibePod" : String(localized: "Imported") })
+                }
+                GlassSegmentedPicker("Period", options: ranges(for: shownSource), selection: Binding(get: { range }, set: show), title: \.label)
 
                 if stats.totalSongsPlayed == 0 {
                     StatsCard("Nothing Yet", systemImage: "headphones") {
-                        Text(range.nothingRecordedNote)
+                        Text(shownSource == .imported ? String(localized: "No imported plays in this period.") : range.nothingRecordedNote)
                             .foregroundStyle(.secondary)
                             .frame(maxWidth: .infinity, alignment: .leading)
                     }
@@ -789,23 +797,25 @@ private struct ListeningStatsSection: View {
                     content
                 }
 
-                StatsCard("Recording", systemImage: "record.circle") {
-                    VStack(alignment: .leading, spacing: 14) {
-                        Toggle("Record Listening", isOn: Binding(
-                            get: { isEnabled },
-                            set: { setEnabled($0) }
-                        ))
-                        Divider()
-                        Button("Erase All Listening Data", role: .destructive) {
-                            guard SettingsSwipe.allowsTaps else { return }
-                            confirmsErase = true
+                if shownSource != .imported {
+                    StatsCard("Recording", systemImage: "record.circle") {
+                        VStack(alignment: .leading, spacing: 14) {
+                            Toggle("Record Listening", isOn: Binding(
+                                get: { isEnabled },
+                                set: { setEnabled($0) }
+                            ))
+                            Divider()
+                            Button("Erase All Listening Data", role: .destructive) {
+                                guard SettingsSwipe.allowsTaps else { return }
+                                confirmsErase = true
+                            }
+                            .buttonStyle(.plain)
+                            .foregroundStyle(.red)
+                            .disabled(entryCount == 0)
+                            Text(entryCount == 0 ? "Nothing recorded yet." : "\(entryCount) plays recorded, on this iPhone only.")
+                                .font(.footnote)
+                                .foregroundStyle(.secondary)
                         }
-                        .buttonStyle(.plain)
-                        .foregroundStyle(.red)
-                        .disabled(entryCount == 0)
-                        Text(entryCount == 0 ? "Nothing recorded yet." : "\(entryCount) plays recorded, on this iPhone only.")
-                            .font(.footnote)
-                            .foregroundStyle(.secondary)
                     }
                 }
             } else {
@@ -834,6 +844,12 @@ private struct ListeningStatsSection: View {
         }
         .onReceive(NotificationCenter.default.publisher(for: WorkoutListening.didChange)) { _ in
             withAnimation(.smooth) { refresh() }
+        }
+        .onReceive(NotificationCenter.default.publisher(for: ListeningStatsService.historyDidChange)) { _ in
+            withAnimation(.smooth) {
+                showsSources = Self.sourcesShown
+                refresh()
+            }
         }
         .alert("Turn On Listening Stats?", isPresented: $confirmsEnable) {
             Button("Cancel", role: .cancel) {}
@@ -866,7 +882,7 @@ private struct ListeningStatsSection: View {
                             .font(.largeTitle.bold())
                             .monospacedDigit()
                         // The period reaches back before the first play recorded.
-                        if let first = service.firstRecordDate,
+                        if let first = service.firstRecordDate(source: shownSource),
                            first > Date().addingTimeInterval(-range.interval) {
                             Text("since \(first.formatted(.dateTime.day().month(.wide).year()))")
                                 .font(.footnote)
@@ -982,7 +998,8 @@ private struct ListeningStatsSection: View {
         }
 
         if extras.workoutPlays > 0 {
-            StatsCard("During Workouts", systemImage: "figure.run", isExpanded: expansion($showsAllWorkoutSongs, count: extras.workoutSongs.count)) {
+            let workoutSongs = workoutActivity.flatMap { extras.workoutSongsByActivity[$0] } ?? extras.workoutSongs
+            StatsCard("During Workouts", systemImage: "figure.run", isExpanded: expansion($showsAllWorkoutSongs, count: workoutSongs.count)) {
                 VStack(alignment: .leading, spacing: 16) {
                     VStack(alignment: .leading, spacing: 2) {
                         Text(StatsFormat.duration(extras.workoutSeconds))
@@ -998,15 +1015,21 @@ private struct ListeningStatsSection: View {
                                 ShareRow(title: activity.name, count: activity.count, total: extras.workoutPlays, value: StatsFormat.plays)
                             }
                         }
+                        WorkoutActivityFilter(activities: extras.workoutActivities.map(\.name), selection: $workoutActivity)
                     }
-                    RankedList(items: extras.workoutSongs, isExpanded: showsAllWorkoutSongs) { rank, song in
+                    RankedList(items: workoutSongs, isExpanded: showsAllWorkoutSongs) { rank, song in
                         RankedRow(rank: rank, title: song.title, detail: song.artist, trailing: StatsFormat.plays(song.count)) {
                             ArtworkImage(source: libraryVM.songs.first { $0.id == song.songID }?.artworkSource, cornerRadius: 6, points: 44)
                                 .frame(width: 44, height: 44)
                         }
                         .hidesFromStats(.song(song.songID), label: song.title)
                     }
+                    .id(workoutActivity)
+                    .transition(.opacity)
                 }
+            }
+            .onChange(of: extras.workoutActivities.map(\.name)) { _, names in
+                if let workoutActivity, !names.contains(workoutActivity) { self.workoutActivity = nil }
             }
         }
 
@@ -1054,16 +1077,55 @@ private struct ListeningStatsSection: View {
     }
 
     private func refresh() {
-        stats = service.aggregate(for: range)
-        extras = ListeningExtras(entries: service.entries(in: range), range: range, songs: libraryVM.songs)
+        stats = service.aggregate(for: range, source: shownSource)
+        extras = ListeningExtras(entries: service.entries(in: range, source: shownSource), range: range, songs: libraryVM.songs)
         entryCount = service.totalEntriesCount()
+    }
+
+    /// The source picked, when imported plays are shown separately.
+    private var shownSource: ListeningStatsService.Source? {
+        showsSources ? source : nil
+    }
+
+    private static var sourcesShown: Bool {
+        ImportedHistory.showsSeparately && !ImportedHistory.shared.packages.isEmpty
+    }
+
+    private func ranges(for source: ListeningStatsService.Source?) -> [ListeningStatsTimeRange] {
+        ListeningStatsTimeRange.allCases.filter { $0 != .allTime || service.hasMoreThanAYear(source: source) }
+    }
+
+    /// Imported plays are often years old: rather than an empty week, the
+    /// shortest period that holds some is shown.
+    private func showSource(_ newSource: ListeningStatsService.Source) {
+        let resolved: ListeningStatsService.Source? = showsSources ? newSource : nil
+        let available = ranges(for: resolved)
+        var newRange = available.contains(range) ? range : (available.last ?? .year)
+        var newStats = service.aggregate(for: newRange, source: resolved)
+        if newStats.totalSongsPlayed == 0 {
+            for candidate in available where candidate.interval > newRange.interval {
+                let candidateStats = service.aggregate(for: candidate, source: resolved)
+                if candidateStats.totalSongsPlayed > 0 {
+                    newRange = candidate
+                    newStats = candidateStats
+                    break
+                }
+            }
+        }
+        let newExtras = ListeningExtras(entries: service.entries(in: newRange, source: resolved), range: newRange, songs: libraryVM.songs)
+        withAnimation(StatsMotion.page) {
+            source = newSource
+            range = newRange
+            stats = newStats
+            extras = newExtras
+        }
     }
 
     /// The period's numbers change in place, with the tap: the bars grow or
     /// shrink to their new values rather than the page being rebuilt.
     private func show(_ newRange: ListeningStatsTimeRange) {
-        let newStats = service.aggregate(for: newRange)
-        let newExtras = ListeningExtras(entries: service.entries(in: newRange), range: newRange, songs: libraryVM.songs)
+        let newStats = service.aggregate(for: newRange, source: shownSource)
+        let newExtras = ListeningExtras(entries: service.entries(in: newRange, source: shownSource), range: newRange, songs: libraryVM.songs)
         withAnimation(StatsMotion.page) {
             range = newRange
             stats = newStats
@@ -1478,6 +1540,7 @@ private struct ListeningExtras {
     var workoutCount = 0
     var workoutSongs: [(songID: UUID, title: String, artist: String, count: Int)] = []
     var workoutActivities: [(name: String, count: Int)] = []
+    var workoutSongsByActivity: [String: [(songID: UUID, title: String, artist: String, count: Int)]] = [:]
     var workoutPlays = 0
 
     static let empty = ListeningExtras()
@@ -1530,76 +1593,193 @@ private struct ListeningExtras {
         workoutPlays = plays.count
         workoutSeconds = plays.reduce(0) { $0 + $1.entry.durationPlayed }
         workoutCount = Set(plays.map(\.session.start)).count
-        var songCounts: [UUID: (entry: ListeningStatsEntry, count: Int)] = [:]
         var activityCounts: [String: Int] = [:]
-        for play in plays {
-            songCounts[play.entry.songID, default: (play.entry, 0)].count += 1
-            activityCounts[play.session.activityName, default: 0] += 1
+        for play in plays { activityCounts[play.session.activityName, default: 0] += 1 }
+        func ranked(_ plays: some Sequence<(entry: ListeningStatsEntry, session: WorkoutSession)>) -> [(songID: UUID, title: String, artist: String, count: Int)] {
+            var songCounts: [UUID: (entry: ListeningStatsEntry, count: Int)] = [:]
+            for play in plays { songCounts[play.entry.songID, default: (play.entry, 0)].count += 1 }
+            return songCounts.values
+                .filter { !StatsHidden.contains(.song($0.entry.songID)) }
+                .sorted { $0.count != $1.count ? $0.count > $1.count : $0.entry.title < $1.entry.title }
+                .prefix(StatsList.expandedCount)
+                .map { (songID: $0.entry.songID, title: byID[$0.entry.songID]?.title ?? $0.entry.title, artist: byID[$0.entry.songID]?.artist ?? $0.entry.artist, count: $0.count) }
         }
-        workoutSongs = songCounts.values
-            .filter { !StatsHidden.contains(.song($0.entry.songID)) }
-            .sorted { $0.count != $1.count ? $0.count > $1.count : $0.entry.title < $1.entry.title }
-            .prefix(StatsList.expandedCount)
-            .map { (songID: $0.entry.songID, title: byID[$0.entry.songID]?.title ?? $0.entry.title, artist: byID[$0.entry.songID]?.artist ?? $0.entry.artist, count: $0.count) }
+        workoutSongs = ranked(plays)
+        if activityCounts.count > 1 {
+            workoutSongsByActivity = Dictionary(grouping: plays) { $0.session.activityName }.mapValues { ranked($0) }
+        }
         workoutActivities = activityCounts.sorted { $0.value > $1.value }.map { (name: $0.key, count: $0.value) }
     }
 }
 
+/// Which songs to show in During Workouts: all, or one kind of workout.
+private struct WorkoutActivityFilter: View {
+    let activities: [String]
+    @Binding var selection: String?
+
+    var body: some View {
+        ScrollView(.horizontal) {
+            GlassEffectContainer(spacing: 8) {
+                HStack(spacing: 8) {
+                    chip(String(localized: "All"), value: nil)
+                    ForEach(activities, id: \.self) { chip($0, value: $0) }
+                }
+            }
+            .padding(.vertical, 6)
+        }
+        // Scrolls edge to edge of the card and stops there, rather than
+        // spilling past it and off the screen.
+        .contentMargins(.horizontal, 20, for: .scrollContent)
+        .padding(.horizontal, -20)
+        .padding(.vertical, -4)
+        .scrollIndicators(.hidden)
+        .sensoryFeedback(.selection, trigger: selection)
+    }
+
+    @ViewBuilder
+    private func chip(_ title: String, value: String?) -> some View {
+        let button = Button {
+            withAnimation(.smooth(duration: 0.3)) { selection = value }
+        } label: {
+            Text(title)
+                .font(.subheadline.weight(.semibold))
+                .padding(.horizontal, 4)
+        }
+        if selection == value {
+            button.buttonStyle(.glassProminent)
+        } else {
+            button.buttonStyle(.glass)
+        }
+    }
+}
+
 /// Listening time across the period, as a smooth wave; touch and hold to
-/// read a day, week or month.
+/// read a day, week or month. Drawn as one shape over a fixed number of
+/// samples, so a new period morphs the wave in a single spring instead of
+/// marks being added and removed.
 private struct ListeningTimelineChart: View {
     let points: [ListeningExtras.Point]
     let unit: Calendar.Component
-    @State private var selection: Date?
+    @State private var selected: Int?
+    @State private var calloutWidth: CGFloat = 0
 
-    private var picked: ListeningExtras.Point? {
-        guard let selection else { return nil }
-        return points.min { abs($0.date.timeIntervalSince(selection)) < abs($1.date.timeIntervalSince(selection)) }
+    private var hours: Bool { (points.map(\.seconds).max() ?? 0) >= 2 * 3600 }
+
+    private func amount(_ seconds: TimeInterval) -> Double { seconds / (hours ? 3600 : 60) }
+
+    /// The top of the scale: the highest value rounded up to 1, 2 or 5 × 10ⁿ.
+    private var top: Double {
+        let highest = points.map { amount($0.seconds) }.max() ?? 0
+        guard highest > 0 else { return 1 }
+        let magnitude = pow(10, floor(log10(highest)))
+        return [1.0, 2, 5, 10].map { $0 * magnitude }.first { $0 >= highest } ?? highest
+    }
+
+    private var samples: WaveSamples {
+        WaveSamples(resampling: points.map { amount($0.seconds) / top })
     }
 
     var body: some View {
-        let hours = (points.map(\.seconds).max() ?? 0) >= 2 * 3600
-        Chart {
-            ForEach(points) { point in
-                AreaMark(x: .value("Date", point.date), y: .value("Time", point.seconds / (hours ? 3600 : 60)))
-                    .interpolationMethod(.catmullRom)
-                    .foregroundStyle(LinearGradient(colors: [Color.statsTint.opacity(0.55), Color.statsTint.opacity(0.2)], startPoint: .top, endPoint: .bottom))
-                LineMark(x: .value("Date", point.date), y: .value("Time", point.seconds / (hours ? 3600 : 60)))
-                    .interpolationMethod(.catmullRom)
-                    .foregroundStyle(Color.statsTint)
-                    .lineStyle(StrokeStyle(lineWidth: 2.5, lineCap: .round, lineJoin: .round))
+        let top = top
+        VStack(spacing: 6) {
+            HStack(alignment: .top, spacing: 8) {
+                GeometryReader { geometry in
+                    plot(in: geometry.size)
+                }
+                yLabels(top: top)
             }
-            if let picked {
-                RuleMark(x: .value("Date", picked.date))
-                    .foregroundStyle(Color.secondary.opacity(0.35))
-                    .lineStyle(StrokeStyle(lineWidth: 1))
-                    .annotation(position: .top, spacing: 4, overflowResolution: .init(x: .fit(to: .chart), y: .disabled)) {
-                        StatsCallout(title: title(for: picked.date), value: StatsFormat.duration(picked.seconds))
-                    }
-                PointMark(x: .value("Date", picked.date), y: .value("Time", picked.seconds / (hours ? 3600 : 60)))
-                    .foregroundStyle(Color.statsTint)
-                    .symbolSize(60)
-            }
+            xLabels
         }
-        .chartXSelection(value: $selection)
-        .sensoryFeedback(.selection, trigger: picked?.date) { _, new in new != nil }
-        .holdsSettingsSwipe(while: selection != nil)
-        .chartYAxis {
-            AxisMarks(position: .trailing, values: .automatic(desiredCount: 3)) { value in
-                AxisGridLine()
-                AxisValueLabel {
-                    if let amount = value.as(Double.self) {
-                        Text(hours ? String(localized: "\(Int(amount.rounded())) h") : String(localized: "\(Int(amount.rounded())) min"))
-                    }
+        .padding(.top, 8)
+        .frame(height: 158)
+        .sensoryFeedback(.selection, trigger: selected) { _, new in new != nil }
+        .holdsSettingsSwipe(while: selected != nil)
+    }
+
+    private func plot(in size: CGSize) -> some View {
+        let samples = samples
+        return ZStack(alignment: .topLeading) {
+            Path { path in
+                for fraction in [0.0, 0.5, 1] {
+                    let y = size.height * fraction
+                    path.move(to: CGPoint(x: 0, y: y))
+                    path.addLine(to: CGPoint(x: size.width, y: y))
                 }
             }
-        }
-        .chartXAxis {
-            AxisMarks(values: .automatic(desiredCount: 4)) { _ in
-                AxisValueLabel(format: unit == .month ? .dateTime.month(.abbreviated).year(.twoDigits) : .dateTime.day().month(.abbreviated))
+            .stroke(Color.secondary.opacity(0.18), style: StrokeStyle(lineWidth: 0.5, dash: [2, 3]))
+
+            WaveShape(samples: samples, closed: true)
+                .fill(LinearGradient(colors: [Color.statsTint.opacity(0.55), Color.statsTint.opacity(0.2)], startPoint: .top, endPoint: .bottom))
+            WaveShape(samples: samples, closed: false)
+                .stroke(Color.statsTint, style: StrokeStyle(lineWidth: 2.5, lineCap: .round, lineJoin: .round))
+
+            if let selected, points.indices.contains(selected) {
+                let point = points[selected]
+                let x = points.count > 1 ? size.width * CGFloat(selected) / CGFloat(points.count - 1) : size.width / 2
+                let y = size.height * (1 - CGFloat(min(1, max(0, amount(point.seconds) / top))))
+                Rectangle()
+                    .fill(Color.secondary.opacity(0.35))
+                    .frame(width: 1, height: size.height + 8)
+                    .position(x: x, y: size.height / 2 - 4)
+                Circle()
+                    .fill(Color.statsTint)
+                    .frame(width: 9, height: 9)
+                    .position(x: x, y: y)
+                StatsCallout(title: title(for: point.date), value: StatsFormat.duration(point.seconds))
+                    .onGeometryChange(for: CGFloat.self, of: \.size.width) { calloutWidth = $0 }
+                    .position(x: min(max(x, calloutWidth / 2), size.width - calloutWidth / 2), y: -28)
             }
         }
-        .frame(height: 150)
+        .contentShape(.rect)
+        .gesture(
+            LongPressGesture(minimumDuration: 0.12)
+                .sequenced(before: DragGesture(minimumDistance: 0))
+                .onChanged { value in
+                    guard case let .second(true, drag?) = value, points.count > 1 else { return }
+                    let fraction = min(1, max(0, drag.location.x / max(1, size.width)))
+                    let index = Int((fraction * CGFloat(points.count - 1)).rounded())
+                    if index != selected { selected = index }
+                }
+                .onEnded { _ in selected = nil }
+        )
+    }
+
+    /// Three labels on the grid lines: the top, half of it and zero.
+    private func yLabels(top: Double) -> some View {
+        VStack(alignment: .trailing, spacing: 0) {
+            ForEach(Array([top, top / 2, 0].enumerated()), id: \.offset) { index, value in
+                if index > 0 { Spacer(minLength: 0) }
+                Text(label(value))
+                    .font(.caption2)
+                    .foregroundStyle(.secondary)
+                    .monospacedDigit()
+                    .contentTransition(.numericText(value: value))
+                    .frame(height: 0)
+            }
+        }
+        .fixedSize(horizontal: true, vertical: false)
+    }
+
+    private func label(_ value: Double) -> String {
+        let shown = value == value.rounded() || value >= 10 ? String(Int(value.rounded())) : value.formatted(.number.precision(.fractionLength(1)))
+        return hours ? String(localized: "\(shown) h") : String(localized: "\(shown) min")
+    }
+
+    /// Four dates under the wave, fading over when the period changes.
+    private var xLabels: some View {
+        let indices = points.count > 1 ? [0, 1, 2, 3].map { Int((Double($0) / 3 * Double(points.count - 1)).rounded()) } : []
+        return HStack(spacing: 0) {
+            ForEach(Array(indices.enumerated()), id: \.offset) { position, index in
+                if position > 0 { Spacer(minLength: 4) }
+                Text(points[index].date, format: unit == .month ? .dateTime.month(.abbreviated).year(.twoDigits) : .dateTime.day().month(.abbreviated))
+                    .font(.caption2)
+                    .foregroundStyle(.secondary)
+                    .lineLimit(1)
+            }
+        }
+        .id("\(unit)-\(points.first?.date.timeIntervalSince1970 ?? 0)-\(points.count)")
+        .transition(.opacity)
+        .padding(.trailing, 36)
     }
 
     private func title(for date: Date) -> String {
@@ -1608,6 +1788,74 @@ private struct ListeningTimelineChart: View {
         case .month: date.formatted(.dateTime.month(.wide).year())
         default: date.formatted(.dateTime.weekday(.abbreviated).day().month(.abbreviated))
         }
+    }
+}
+
+/// A wave's heights (0…1) at a fixed number of evenly spaced points: any
+/// period's wave animates into any other's.
+private struct WaveSamples: VectorArithmetic {
+    static let count = 96
+    var values: [Double]
+
+    init(_ values: [Double]) { self.values = values }
+
+    /// A smooth curve through `heights` (Catmull-Rom), read at `count` points.
+    init(resampling heights: [Double]) {
+        guard heights.count > 1 else {
+            values = Array(repeating: heights.first ?? 0, count: Self.count)
+            return
+        }
+        let last = heights.count - 1
+        values = (0..<Self.count).map { sample in
+            let position = Double(sample) / Double(Self.count - 1) * Double(last)
+            let i = min(Int(position), last - 1)
+            let t = position - Double(i)
+            let p0 = heights[max(i - 1, 0)], p1 = heights[i], p2 = heights[i + 1], p3 = heights[min(i + 2, last)]
+            let value = 0.5 * (2 * p1 + (p2 - p0) * t + (2 * p0 - 5 * p1 + 4 * p2 - p3) * t * t + (3 * p1 - p0 - 3 * p2 + p3) * t * t * t)
+            return min(1, max(0, value))
+        }
+    }
+
+    static var zero: WaveSamples { WaveSamples(Array(repeating: 0, count: count)) }
+    static func + (lhs: WaveSamples, rhs: WaveSamples) -> WaveSamples { WaveSamples(zip(lhs.values, rhs.values).map(+)) }
+    static func - (lhs: WaveSamples, rhs: WaveSamples) -> WaveSamples { WaveSamples(zip(lhs.values, rhs.values).map(-)) }
+    mutating func scale(by rhs: Double) { values = values.map { $0 * rhs } }
+    var magnitudeSquared: Double { values.reduce(0) { $0 + $1 * $1 } }
+}
+
+private struct WaveShape: Shape {
+    var samples: WaveSamples
+    /// Closed down to the baseline, for the fill under the line.
+    var closed: Bool
+
+    var animatableData: WaveSamples {
+        get { samples }
+        set { samples = newValue }
+    }
+
+    func path(in rect: CGRect) -> Path {
+        let values = samples.values
+        guard values.count > 1 else { return Path() }
+        let step = rect.width / CGFloat(values.count - 1)
+        func point(_ i: Int) -> CGPoint {
+            CGPoint(x: rect.minX + step * CGFloat(i), y: rect.maxY - rect.height * CGFloat(min(1, max(0, values[i]))))
+        }
+        var path = Path()
+        path.move(to: point(0))
+        for i in 1..<values.count {
+            let p0 = point(max(i - 2, 0)), p1 = point(i - 1), p2 = point(i), p3 = point(min(i + 1, values.count - 1))
+            path.addCurve(
+                to: p2,
+                control1: CGPoint(x: p1.x + (p2.x - p0.x) / 6, y: min(rect.maxY, p1.y + (p2.y - p0.y) / 6)),
+                control2: CGPoint(x: p2.x - (p3.x - p1.x) / 6, y: min(rect.maxY, p2.y - (p3.y - p1.y) / 6))
+            )
+        }
+        if closed {
+            path.addLine(to: CGPoint(x: rect.maxX, y: rect.maxY))
+            path.addLine(to: CGPoint(x: rect.minX, y: rect.maxY))
+            path.closeSubpath()
+        }
+        return path
     }
 }
 

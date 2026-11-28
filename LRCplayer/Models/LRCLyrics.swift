@@ -70,4 +70,24 @@ extension LRCLyrics {
     var isGenerated: Bool {
         metadata["by"]?.hasPrefix("LRCplayer AI") == true
     }
+
+    /// What the signature says: the model that heard the words and, for
+    /// a sync of existing lyrics, where those came from. Older files named
+    /// the service only (Speechmatics was always Enhanced then), the first
+    /// ones nothing: Mistral wrote those. Older syncs aren't marked as such.
+    var aiCredit: (model: String, syncOnly: Bool, source: String?)? {
+        guard isGenerated, let by = metadata["by"] else { return nil }
+        guard let open = by.firstIndex(of: "("), let close = by.lastIndex(of: ")"), open < close else { return ("Voxtral", false, nil) }
+        let parts = by[by.index(after: open)..<close].components(separatedBy: "; ")
+        let model = switch parts[0] {
+        case "Mistral": "Voxtral"
+        case "Groq": "Whisper"
+        case "Speechmatics": "Speechmatics Enhanced"
+        default: parts[0]
+        }
+        guard parts.count > 1 else { return (model, false, nil) }
+        let prefix = "lyrics from "
+        let source = parts[1].hasPrefix(prefix) ? String(parts[1].dropFirst(prefix.count)) : nil
+        return (model, true, source)
+    }
 }

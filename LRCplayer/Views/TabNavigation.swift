@@ -275,6 +275,7 @@ class PageHostingController: UIHostingController<AnyView>, UISearchResultsUpdati
         super.init(rootView: AnyView(EmptyView()))
         rootView = AnyView(PageChromeReader(content: AnyView(content.appEnvironment(services)), controller: self))
         apply(title: title)
+        view.backgroundColor = .pageBackground
     }
 
     override func viewDidLayoutSubviews() {
@@ -345,8 +346,26 @@ class PageHostingController: UIHostingController<AnyView>, UISearchResultsUpdati
         return UIBarButtonItem(customView: newHost.view)
     }
 
+    /// The Mac's title bar draws the search field above every window, Now
+    /// Playing included: set aside while it covers the page.
+    var setsSearchAside = false {
+        didSet {
+            guard setsSearchAside != oldValue else { return }
+            if setsSearchAside {
+                asideSearchController = navigationItem.searchController
+                navigationItem.searchController = nil
+            } else {
+                navigationItem.searchController = asideSearchController
+                asideSearchController = nil
+                apply(search: search)
+            }
+        }
+    }
+    private var asideSearchController: UISearchController?
+
     fileprivate func apply(search: PageSearch?) {
         self.search = search
+        if setsSearchAside { return }
         guard let search else {
             navigationItem.searchController = nil
             return
@@ -502,6 +521,9 @@ final class TabNavigationController: UINavigationController, UINavigationControl
 
     func navigationController(_ navigationController: UINavigationController, didShow viewController: UIViewController, animated: Bool) {
         services.router.didShow(routes, in: appTab)
+        // A new page can bring the full-screen title bar's background back.
+        MacFullScreenTitlebar.clear()
+        if MacApp.isActive { DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) { MacFullScreenTitlebar.clear() } }
     }
 }
 
@@ -518,7 +540,7 @@ struct TabNavigationHost<Root: View>: UIViewControllerRepresentable {
         if !pending.isEmpty { controller.setRoutes(pending, animated: false) }
         // Settings sit to the left of Library, where their button is.
         let services = services
-        let panel: (() -> UIViewController)? = tab == .library ? { SettingsPanelController(services: services) } : nil
+        let panel: (() -> UIViewController)? = tab == .library && !MacApp.isActive ? { SettingsPanelController(services: services) } : nil
         return TabRootController(navigation: controller, makePanel: panel, router: services.router)
     }
 
@@ -539,6 +561,8 @@ final class TabRootController: UIViewController, UIGestureRecognizerDelegate {
     private var panel: UIViewController?
     private var animator: UIViewPropertyAnimator?
     private var observation: AnyCancellable?
+    private var miniPlayerObservation: AnyCancellable?
+    private var macPlayerObservation: AnyCancellable?
     /// 0: the page is on screen; 1: the panel is.
     private var progress: CGFloat = 0
     private var panStartProgress: CGFloat = 0
@@ -566,6 +590,26 @@ final class TabRootController: UIViewController, UIGestureRecognizerDelegate {
         view.addSubview(navigation.view)
         navigation.didMove(toParent: self)
 
+        // Room for a floating player: the mini player, or the wide bar.
+        miniPlayerObservation = FloatingMiniPlayerState.shared.$reservedHeight
+            .removeDuplicates()
+            .sink { [weak self] inset in
+                guard let self else { return }
+                guard self.additionalSafeAreaInsets.bottom != inset else { return }
+                UIView.animate(withDuration: 0.35) {
+                    self.additionalSafeAreaInsets.bottom = inset
+                    self.view.layoutIfNeeded()
+                }
+            }
+
+        // The Mac's title bar draws the bar buttons above Now Playing.
+        if MacApp.isActive {
+            macPlayerObservation = MacChrome.shared.$isPlayerOpen
+                .combineLatest(MacChrome.shared.$coverCount) { isOpen, covers in isOpen || covers > 0 }
+                .removeDuplicates()
+                .sink { [weak self] isOpen in self?.setBarItemsHidden(isOpen) }
+        }
+
         guard makePanel != nil else { return }
         observation = router?.$showSettings
             .removeDuplicates()
@@ -577,17 +621,70 @@ final class TabRootController: UIViewController, UIGestureRecognizerDelegate {
             }
     }
 
+    override func viewDidAppear(_ animated: Bool) {
+        super.viewDidAppear(animated)
+        FloatingMiniPlayerState.shared.attach(to: tabBarController)
+    }
+
+    /// The Mac's title bar shows the pages' bar items as its own, above
+    /// every window: hidden while Now Playing covers the window.
+    private func setBarItemsHidden(_ hidden: Bool) {
+        let controllers = [navigation, panel as? UINavigationController].compactMap { $0 }.flatMap(\.viewControllers)
+        for item in controllers.map(\.navigationItem) {
+            for button in (item.leftBarButtonItems ?? []) + (item.rightBarButtonItems ?? []) {
+                button.isHidden = hidden
+            }
+            item.setHidesBackButton(hidden, animated: false)
+        }
+        for case let page as PageHostingController in controllers {
+            page.setsSearchAside = hidden
+        }
+    }
+
     override func viewDidLayoutSubviews() {
         super.viewDidLayoutSubviews()
-        // The slide is a translation by the width: a new width (the screen
-        // turned, an iPhone Duo folded) needs it again.
+        // The slide depends on the width: a new width (the screen turned, an
+        // iPhone Duo folded, an iPad window resized) needs it again.
         if animator == nil { apply(progress: progress) }
     }
+
+    /// On a wide screen Settings take a column at the left and the page
+    /// narrows beside them, still usable; elsewhere they take the screen.
+    private var sideWidth: CGFloat? {
+        let width = view.bounds.width - sidebarInset
+        guard view.window?.traitCollection.horizontalSizeClass == .regular,
+              width >= 700 else { return nil }
+        return min(400, max(360, (width / 3).rounded()))
+    }
+
+    /// The iPad's sidebar floats over the page's leading edge: the column
+    /// starts beside it, not under it.
+    private var sidebarInset: CGFloat { view.safeAreaInsets.left }
+
+    /// The distance the slide covers.
+    private var slideWidth: CGFloat { sideWidth.map { $0 + sidebarInset } ?? view.bounds.width }
+
+    override func viewSafeAreaInsetsDidChange() {
+        super.viewSafeAreaInsetsDidChange()
+        // The sidebar shown or hidden: the column moves with its edge. A
+        // slide under way lands at once (it ran toward the old frames).
+        if let animator {
+            animator.stopAnimation(true)
+            self.animator = nil
+            apply(progress: isOpen ? 1 : 0)
+            if !isOpen { (panel as? UINavigationController)?.popToRootViewController(animated: false) }
+        } else {
+            apply(progress: progress)
+        }
+    }
+
+    /// Whether Settings sit beside the page (or cover it), as last laid out.
+    private var laidOutAsColumn: Bool?
 
     override func contentScrollView(for edge: NSDirectionalRectEdge) -> UIScrollView? {
         // The open panel's scroll view drives the large title and the tab
         // bar's minimizing, like a page's.
-        if progress > 0.5, let panel = panel as? UINavigationController {
+        if progress > 0.5, sideWidth == nil, let panel = panel as? UINavigationController {
             return panel.topViewController?.contentScrollView(for: edge)
         }
         return navigation.contentScrollView(for: edge)
@@ -601,6 +698,8 @@ final class TabRootController: UIViewController, UIGestureRecognizerDelegate {
         panel.view.autoresizingMask = [.flexibleWidth, .flexibleHeight]
         view.insertSubview(panel.view, belowSubview: navigation.view)
         panel.didMove(toParent: self)
+        // Its iPhone layout, in its column.
+        panel.traitOverrides.horizontalSizeClass = .compact
         let pan = UIPanGestureRecognizer(target: self, action: #selector(handlePan(_:)))
         pan.delegate = self
         panel.view.addGestureRecognizer(pan)
@@ -611,9 +710,31 @@ final class TabRootController: UIViewController, UIGestureRecognizerDelegate {
 
     private func apply(progress: CGFloat) {
         self.progress = progress
-        let width = view.bounds.width
-        navigation.view.transform = CGAffineTransform(translationX: progress * width, y: 0)
-        panel?.view.transform = CGAffineTransform(translationX: (progress - 1) * width, y: 0)
+        let bounds = view.bounds
+        let side = sideWidth
+        if panel != nil, laidOutAsColumn != (side != nil) {
+            // Column or full screen changed under open Settings (sidebar,
+            // rotation, window size): the page's taps and the bar follow.
+            laidOutAsColumn = side != nil
+            navigation.view.isUserInteractionEnabled = !isOpen || side != nil
+            DispatchQueue.main.async { [weak self] in self?.setNeedsUpdateOfScrollEdgeElements() }
+        }
+        if let side {
+            // The page gives up the panel's width (and moves out from under
+            // the sidebar), the panel follows its edge.
+            let x = progress * (side + sidebarInset)
+            navigation.view.transform = .identity
+            navigation.view.frame = CGRect(x: x, y: 0, width: bounds.width - x, height: bounds.height)
+            panel?.view.transform = .identity
+            panel?.view.frame = CGRect(x: x - side, y: 0, width: side, height: bounds.height)
+        } else {
+            navigation.view.transform = .identity
+            navigation.view.frame = bounds
+            panel?.view.transform = .identity
+            panel?.view.frame = bounds
+            navigation.view.transform = CGAffineTransform(translationX: progress * bounds.width, y: 0)
+            panel?.view.transform = CGAffineTransform(translationX: (progress - 1) * bounds.width, y: 0)
+        }
     }
 
     private func setPanel(open: Bool, velocity: CGFloat = 0, animated: Bool = true) {
@@ -624,7 +745,8 @@ final class TabRootController: UIViewController, UIGestureRecognizerDelegate {
             animator?.stopAnimation(true)
             animator = nil
             apply(progress: target)
-            navigation.view.isUserInteractionEnabled = !open
+            navigation.view.isUserInteractionEnabled = !open || sideWidth != nil
+            laidOutAsColumn = sideWidth != nil
             panel?.view.isUserInteractionEnabled = open
             if !open { (panel as? UINavigationController)?.popToRootViewController(animated: false) }
             setNeedsUpdateOfScrollEdgeElements()
@@ -633,10 +755,11 @@ final class TabRootController: UIViewController, UIGestureRecognizerDelegate {
         let current = presentedProgress()
         animator?.stopAnimation(true)
         apply(progress: current)
-        navigation.view.isUserInteractionEnabled = !open
+        navigation.view.isUserInteractionEnabled = !open || sideWidth != nil
+        laidOutAsColumn = sideWidth != nil
         panel?.view.isUserInteractionEnabled = open
         // The finger's speed, relative to the distance left.
-        let distance = abs(target - current) * view.bounds.width
+        let distance = abs(target - current) * slideWidth
         let relative = distance > 1 ? abs(velocity) / distance : 0
         let timing = UISpringTimingParameters(duration: 0.5, bounce: 0, initialVelocity: CGVector(dx: relative, dy: 0))
         let animator = UIViewPropertyAnimator(duration: 0.5, timingParameters: timing)
@@ -660,9 +783,14 @@ final class TabRootController: UIViewController, UIGestureRecognizerDelegate {
 
     /// Where the slide is on screen, mid-animation included.
     private func presentedProgress() -> CGFloat {
-        let width = view.bounds.width
+        let width = slideWidth
         guard width > 0 else { return progress }
-        let x = navigation.view.layer.presentation()?.affineTransform().tx ?? navigation.view.transform.tx
+        let x: CGFloat
+        if sideWidth != nil {
+            x = navigation.view.layer.presentation()?.frame.minX ?? navigation.view.frame.minX
+        } else {
+            x = navigation.view.layer.presentation()?.affineTransform().tx ?? navigation.view.transform.tx
+        }
         return min(max(x / width, 0), 1)
     }
 
@@ -675,8 +803,17 @@ final class TabRootController: UIViewController, UIGestureRecognizerDelegate {
         // Only a leftward, mostly horizontal swipe, from any page of the
         // panel (a pushed page swipes right to go back to Settings).
         let velocity = pan.velocity(in: view)
-        return velocity.x < 0 && abs(velocity.x) > abs(velocity.y)
+        guard velocity.x < 0, abs(velocity.x) > abs(velocity.y) else { return false }
+        // A row that scrolls sideways (filter chips) scrolls first; at its
+        // end, the swipe closes the panel.
+        if let scroller = sidewaysScrollerUnderTouch {
+            let end = scroller.contentSize.width + scroller.adjustedContentInset.right - scroller.bounds.width
+            if scroller.contentOffset.x < end - 1 { return false }
+        }
+        return true
     }
+
+    private weak var sidewaysScrollerUnderTouch: UIScrollView?
 
     func gestureRecognizer(_ gestureRecognizer: UIGestureRecognizer, shouldRecognizeSimultaneouslyWith other: UIGestureRecognizer) -> Bool {
         true
@@ -685,15 +822,20 @@ final class TabRootController: UIViewController, UIGestureRecognizerDelegate {
     func gestureRecognizer(_ gestureRecognizer: UIGestureRecognizer, shouldReceive touch: UITouch) -> Bool {
         // Sliding a switch's knob to the left turns it off, not the panel.
         var view = touch.view
+        sidewaysScrollerUnderTouch = nil
         while let current = view, current !== self.view {
             if current is UISwitch || current is UISlider { return false }
+            if sidewaysScrollerUnderTouch == nil, let scroller = current as? UIScrollView, scroller.isScrollEnabled,
+               scroller.contentSize.width + scroller.adjustedContentInset.left + scroller.adjustedContentInset.right > scroller.bounds.width + 1 {
+                sidewaysScrollerUnderTouch = scroller
+            }
             view = current.superview
         }
         return true
     }
 
     @objc private func handlePan(_ pan: UIPanGestureRecognizer) {
-        let width = max(view.bounds.width, 1)
+        let width = max(slideWidth, 1)
         switch pan.state {
         case .began:
             let current = presentedProgress()
@@ -792,21 +934,35 @@ struct BarText: View {
 struct BarIcon: View {
     let title: Text
     let systemImage: String
+    /// A template image of the asset catalog in place of the symbol.
+    var assetName: String?
 
-    init(_ title: LocalizedStringResource, systemImage: String) {
+    init(_ title: LocalizedStringResource, systemImage: String, assetName: String? = nil) {
         self.title = Text(title)
         self.systemImage = systemImage
+        self.assetName = assetName
     }
 
     @_disfavoredOverload
-    init<S: StringProtocol>(_ title: S, systemImage: String) {
+    init<S: StringProtocol>(_ title: S, systemImage: String, assetName: String? = nil) {
         self.title = Text(title)
         self.systemImage = systemImage
+        self.assetName = assetName
     }
 
     var body: some View {
-        Image(systemName: systemImage)
-            .font(.system(size: 17, weight: .medium))
+        Group {
+            if let assetName {
+                Image(assetName)
+                    .resizable()
+                    .renderingMode(.template)
+                    .scaledToFit()
+                    .frame(width: 21, height: 21)
+            } else {
+                Image(systemName: systemImage)
+                    .font(.system(size: 17, weight: .medium))
+            }
+        }
             .frame(width: 36, height: 36)
             .contentShape(Rectangle())
             .accessibilityLabel(title)
@@ -819,10 +975,7 @@ extension LibraryRoute {
     func pageTitle(_ libraryVM: LibraryViewModel) -> PageTitle {
         switch self {
         case .playlists: PageTitle(text: "Playlists", large: true)
-        case .artists: PageTitle(text: "Artists", large: true)
         case .albums, .artistAlbums: PageTitle(text: "Albums", large: true)
-        case .songs: PageTitle(text: "Songs", large: true)
-        case .genres: PageTitle(text: "Genres", large: true)
         case .album, .playlist: PageTitle(text: "", large: false)
         case let .artist(name): PageTitle(text: name, large: true)
         case let .genre(name): PageTitle(text: name, large: true)

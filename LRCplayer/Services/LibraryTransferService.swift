@@ -1045,7 +1045,7 @@ private struct StatsIndex {
     private let replays: [String: Int]
 
     init() {
-        history = Dictionary(grouping: ListeningStatsService.shared.allEntries(), by: \.songID)
+        history = Dictionary(grouping: ListeningStatsService.shared.ownEntries(), by: \.songID)
         replays = ReplayedLines.all()
     }
 

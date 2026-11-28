@@ -400,6 +400,12 @@ private struct LyricsCardDesigner: View {
             let offset = playerVM.currentLyrics?.offset ?? 0
             exporting = 0
             exportTask = Task {
+                // A streamed song's audio is downloaded for the video.
+                guard await SubsonicDownloads.shared.ensureLocal(song) else {
+                    exporting = nil
+                    errorMessage = String(localized: "Couldn't download “\(song.title)”")
+                    return
+                }
                 do {
                     let url = try await Task.detached(priority: .userInitiated) {
                         try await LyricsCardExporter.writeVideo(renderer: renderer, start: clip.start, end: clip.end, audioURL: audioURL, audioOffset: offset) { value in

@@ -2,9 +2,144 @@ import SwiftUI
 import Foundation
 import Security
 
-/// The AI features switch and the user's Mistral API key. The key never
-/// leaves this device except to authenticate with Mistral: it lives in the
-/// Keychain, not synced to iCloud nor restored onto another phone.
+/// Who runs the AI features, with the user's own key: Groq (free plan) or
+/// Mistral (for those with an API plan).
+enum AIProvider: String, CaseIterable, Identifiable, Sendable {
+    case groq
+    case mistral
+
+    static let defaultsKey = "aiProvider"
+    var id: String { rawValue }
+
+    static var current: AIProvider {
+        get { UserDefaults.standard.string(forKey: defaultsKey).flatMap(AIProvider.init(rawValue:)) ?? .groq }
+        set {
+            guard newValue != current else { return }
+            UserDefaults.standard.set(newValue.rawValue, forKey: defaultsKey)
+            MistralModelMemory.reset()
+            NotificationCenter.default.post(name: AIFeatures.didChangeNotification, object: nil)
+        }
+    }
+
+    var name: String {
+        switch self {
+        case .groq: "Groq"
+        case .mistral: "Mistral"
+        }
+    }
+
+    var baseURL: URL {
+        switch self {
+        case .groq: URL(string: "https://api.groq.com/openai/v1/")!
+        case .mistral: URL(string: "https://api.mistral.ai/v1/")!
+        }
+    }
+
+    var keysPage: URL {
+        switch self {
+        case .groq: URL(string: "https://console.groq.com/keys")!
+        case .mistral: URL(string: "https://console.mistral.ai/api-keys")!
+        }
+    }
+
+    var consoleHost: String {
+        switch self {
+        case .groq: "console.groq.com"
+        case .mistral: "console.mistral.ai"
+        }
+    }
+
+    fileprivate var keychainAccount: String {
+        switch self {
+        case .groq: "groq-api-key"
+        case .mistral: "mistral-api-key"
+        }
+    }
+
+    /// Lyrics: the most accurate on singing, with a time for every word.
+    var transcriptionModel: String {
+        switch self {
+        case .groq: "whisper-large-v3"
+        case .mistral: "voxtral-mini-latest"
+        }
+    }
+
+    /// The assistant's voice: quick.
+    var voiceModel: String {
+        switch self {
+        case .groq: "whisper-large-v3-turbo"
+        case .mistral: "voxtral-mini-latest"
+        }
+    }
+
+    /// Small jobs (lyrics lines, summaries, matching), best first. Free
+    /// keys can't call some models at all, so each is tried in turn.
+    var lightModels: [String] {
+        switch self {
+        case .groq: ["openai/gpt-oss-20b", "openai/gpt-oss-120b"]
+        case .mistral: ["mistral-small-latest", "ministral-14b-latest", "ministral-8b-latest"]
+        }
+    }
+
+    /// Summaries and matching: the small ones, then a stronger one.
+    var summaryModels: [String] {
+        switch self {
+        case .groq: lightModels
+        case .mistral: lightModels + ["mistral-medium-latest"]
+        }
+    }
+
+    /// The assistant and programs, best first.
+    var strongModels: [String] {
+        switch self {
+        case .groq: ["openai/gpt-oss-120b", "openai/gpt-oss-20b"]
+        case .mistral: ["mistral-medium-latest", "mistral-small-latest", "ministral-14b-latest", "ministral-8b-latest"]
+        }
+    }
+
+    /// What the assistant may send at once: Groq's free plan takes about
+    /// 8,000 tokens a minute per model, answer included.
+    var assistantBudget: AssistantLibrary.Budget {
+        switch self {
+        case .groq: .compact
+        case .mistral: .full
+        }
+    }
+
+    var assistantMaxTokens: Int {
+        switch self {
+        case .groq: 1800
+        case .mistral: 4000
+        }
+    }
+
+    /// Past exchanges the assistant is reminded of.
+    var assistantHistory: Int {
+        switch self {
+        case .groq: 3
+        case .mistral: 20
+        }
+    }
+
+    /// Time between two requests: Groq's free plan allows 30 a minute.
+    var spacing: TimeInterval {
+        switch self {
+        case .groq: 2.05
+        case .mistral: 1.15
+        }
+    }
+
+    /// What a chat request adds for this model: reasoning models think
+    /// briefly, and keep their thoughts to themselves.
+    static func extras(for model: String) -> [String: Any] {
+        guard model.hasPrefix("openai/gpt-oss") else { return [:] }
+        return ["reasoning_effort": "low", "include_reasoning": false]
+    }
+}
+
+/// The AI features switch and the user's API keys. A key never leaves
+/// this device except to authenticate with its provider (and, with Device
+/// Sync, to the user's other devices through their encrypted iCloud).
 enum AIFeatures {
     static let enabledKey = "aiFeaturesEnabled"
     static let didChangeNotification = Notification.Name("AIFeaturesDidChange")
@@ -20,19 +155,40 @@ enum AIFeatures {
     /// On, with a key to use.
     static var isAvailable: Bool { isEnabled && apiKey != nil }
 
+    /// The current provider's key.
     static var apiKey: String? {
-        get { Keychain.read(account: keychainAccount) }
+        get { key(for: .current) }
+        set { setKey(newValue, for: .current) }
+    }
+
+    static func key(for provider: AIProvider) -> String? {
+        Keychain.read(account: provider.keychainAccount)
+    }
+
+    /// Optional, for hearing the songs (see `Speechmatics`).
+    static var speechmaticsKey: String? {
+        get { Keychain.read(account: "speechmatics-api-key") }
         set {
+            guard newValue != speechmaticsKey else { return }
             if let newValue, !newValue.isEmpty {
-                Keychain.write(newValue, account: keychainAccount)
+                Keychain.write(newValue, account: "speechmatics-api-key")
             } else {
-                Keychain.delete(account: keychainAccount)
+                Keychain.delete(account: "speechmatics-api-key")
             }
             NotificationCenter.default.post(name: didChangeNotification, object: nil)
         }
     }
 
-    private static let keychainAccount = "mistral-api-key"
+    static func setKey(_ key: String?, for provider: AIProvider) {
+        guard key != self.key(for: provider) else { return }
+        if let key, !key.isEmpty {
+            Keychain.write(key, account: provider.keychainAccount)
+        } else {
+            Keychain.delete(account: provider.keychainAccount)
+        }
+        if provider == .current { MistralModelMemory.reset() }
+        NotificationCenter.default.post(name: didChangeNotification, object: nil)
+    }
 
     private enum Keychain {
         private static let service = "com.fares.lrc.player.ai"
@@ -75,16 +231,28 @@ enum MistralError: LocalizedError {
     /// The key's plan can't use this model at all (no quota, or forbidden).
     case modelUnavailable
     case fileTooLarge
+    /// The account has no API plan (Mistral's console, Billing).
+    case noSubscription
+    /// More than the plan takes in one go (Groq's tokens a minute).
+    case requestTooLarge
+    /// Groq refused an answer that broke the JSON schema; it's still here
+    /// to read what it can of it.
+    case unvalidatedAnswer(String)
     case server(String)
     case network(String)
 
+    private var provider: AIProvider { .current }
+
     var errorDescription: String? {
         switch self {
-        case .invalidKey: String(localized: "Mistral didn't accept the API key. Check it in Settings › Tools › AI Features.")
-        case .rateLimited: String(localized: "Mistral is limiting requests on this key for now. Try again in a minute.")
-        case .modelUnavailable: String(localized: "This Mistral key can't use the model it needs.")
-        case .fileTooLarge: String(localized: "This song's file is too large to send to Mistral.")
-        case .server(let message): String(localized: "Mistral couldn't process the request: \(message)")
+        case .invalidKey: String(localized: "\(provider.name) didn't accept the API key. Check it in Settings › Tools › AI Features.")
+        case .rateLimited: String(localized: "\(provider.name) is limiting requests on this key for now. Try again in a minute.")
+        case .modelUnavailable: String(localized: "This \(provider.name) key can't use the model it needs.")
+        case .fileTooLarge: String(localized: "This song's file is too large to send to \(provider.name).")
+        case .noSubscription: String(localized: "Your \(provider.name) account has no active API plan. Choose one in its console (\(provider.consoleHost)), or use another provider in Settings › Tools › AI Features.")
+        case .requestTooLarge: String(localized: "This request is too large for \(provider.name)'s free limits. Try a shorter question, or start a new conversation.")
+        case .server(let message): String(localized: "\(provider.name) couldn't process the request: \(message)")
+        case .unvalidatedAnswer: String(localized: "\(provider.name)'s answer couldn't be read. Try again.")
         case .network(let message): message
         }
     }
@@ -97,20 +265,18 @@ struct TimedWord: Sendable, Equatable {
     var end: TimeInterval
 }
 
-/// The few Mistral endpoints VibePod uses (https://docs.mistral.ai).
+/// The few endpoints VibePod uses, the same at Groq and Mistral
+/// (https://console.groq.com/docs, https://docs.mistral.ai).
 enum MistralClient {
-    private static let base = URL(string: "https://api.mistral.ai/v1/")!
+    private static var base: URL { AIProvider.current.baseURL }
+    static var chatURL: URL { base.appendingPathComponent("chat/completions") }
+    static var transcriptionURL: URL { base.appendingPathComponent("audio/transcriptions") }
 
-    /// Speech to text, with a time for every word.
-    static let transcriptionModel = "voxtral-mini-latest"
-
-    /// Best first. Free keys can't call some models at all (0 requests a
-    /// minute), so each is tried in turn.
-    static let layoutModels = ["mistral-small-latest", "ministral-14b-latest", "ministral-8b-latest"]
+    static var layoutModels: [String] { AIProvider.current.lightModels }
 
     /// Checks the key with the cheapest authenticated call.
-    static func validate(key: String) async throws {
-        var request = URLRequest(url: base.appendingPathComponent("models"))
+    static func validate(key: String, provider: AIProvider = .current) async throws {
+        var request = URLRequest(url: provider.baseURL.appendingPathComponent("models"))
         request.setValue("Bearer \(key)", forHTTPHeaderField: "Authorization")
         _ = try await send(request)
     }
@@ -121,13 +287,20 @@ enum MistralClient {
         func field(_ name: String, _ value: String) {
             body.append("--\(boundary)\r\nContent-Disposition: form-data; name=\"\(name)\"\r\n\r\n\(value)\r\n")
         }
-        field("model", transcriptionModel)
-        field("timestamp_granularities", "word")
+        let provider = AIProvider.current
+        field("model", provider.transcriptionModel)
+        switch provider {
+        case .groq:
+            field("response_format", "verbose_json")
+            field("timestamp_granularities[]", "word")
+        case .mistral:
+            field("timestamp_granularities", "word")
+        }
         body.append("--\(boundary)\r\nContent-Disposition: form-data; name=\"file\"; filename=\"\(audio.lastPathComponent)\"\r\nContent-Type: application/octet-stream\r\n\r\n")
         body.append(try Data(contentsOf: audio, options: .mappedIfSafe))
         body.append("\r\n--\(boundary)--\r\n")
 
-        var request = URLRequest(url: base.appendingPathComponent("audio/transcriptions"))
+        var request = URLRequest(url: transcriptionURL)
         request.httpMethod = "POST"
         request.timeoutInterval = 300
         request.setValue("Bearer \(key)", forHTTPHeaderField: "Authorization")
@@ -137,13 +310,57 @@ enum MistralClient {
         let (data, _) = try await send(request, retryingOnce: true)
         struct Response: Decodable {
             struct Segment: Decodable { let text: String; let start: Double; let end: Double }
+            struct Word: Decodable { let word: String; let start: Double; let end: Double }
             let segments: [Segment]?
+            /// Whisper (Groq): the words apart; Voxtral: one word a segment.
+            let words: [Word]?
         }
-        let segments = try JSONDecoder().decode(Response.self, from: data).segments ?? []
-        return segments.compactMap { segment in
+        let response = try JSONDecoder().decode(Response.self, from: data)
+        let segments = response.words.map { $0.map { Response.Segment(text: $0.word, start: $0.start, end: $0.end) } }
+            ?? response.segments ?? []
+        let words: [TimedWord] = segments.compactMap { segment in
             let text = segment.text.trimmingCharacters(in: .whitespacesAndNewlines)
             return text.isEmpty ? nil : TimedWord(text: text, start: segment.start, end: max(segment.end, segment.start))
         }
+        return response.words == nil ? words : unstretched(words)
+    }
+
+    /// Whisper hands a held note, or the silence before a phrase, to the
+    /// word that follows it: "Hey" gets 0.05 s and "Don't" the next 3 s.
+    /// Such a word is moved to the end of its span, where it's really sung.
+    nonisolated static func unstretched(_ words: [TimedWord]) -> [TimedWord] {
+        var words = words
+        for index in words.indices.dropFirst() {
+            let word = words[index]
+            let letters = word.text.filter(\.isLetter).count
+            let spoken = min(0.6, 0.15 + 0.07 * Double(letters))
+            let previous = words[index - 1]
+            let next = index + 1 < words.count ? words[index + 1] : nil
+            // A repeated word ("Okay Okay") is likely held for real.
+            guard next?.text.lowercased() != word.text.lowercased() else { continue }
+            // The word before barely lasts: it's the one being held.
+            // (Or it's short and this one is drawn out by seconds.)
+            let held = previous.end - previous.start
+            let length = word.end - word.start
+            if (held < 0.15 && length > spoken + 0.3) || (held < 0.3 && length > spoken + 1.5) {
+                let start = word.end - spoken
+                words[index].start = start
+                words[index - 1].end = start
+                continue
+            }
+            // A phrase's first word (Whisper capitalizes them) set down at
+            // the start of the pause before it, drawn out or not: it's sung
+            // just before the word that follows. Singers hold a phrase's
+            // end, not its start.
+            // The next word carries the same sentence on (not "Okay. No…").
+            guard let next, word.text.first?.isUppercase == true, word.text != "I",
+                  next.text.first?.isLowercase == true,
+                  next.start - word.start > spoken + 0.8 else { continue }
+            let start = max(word.start, next.start - spoken)
+            words[index].start = start
+            words[index].end = max(min(word.end, next.start), start + 0.1)
+        }
+        return words
     }
 
     /// Indices of the words that open each lyric line, as a lyrics site
@@ -179,9 +396,10 @@ enum MistralClient {
 
         var lastError: Error = MistralError.rateLimited
         for model in layoutModels {
-            var body = payload
+            var body = payload.merging(AIProvider.extras(for: model)) { $1 }
             body["model"] = model
-            var request = URLRequest(url: base.appendingPathComponent("chat/completions"))
+            await MistralPacer.shared.waitTurn()
+            var request = URLRequest(url: chatURL)
             request.httpMethod = "POST"
             request.timeoutInterval = 120
             request.setValue("Bearer \(key)", forHTTPHeaderField: "Authorization")
@@ -220,7 +438,7 @@ enum MistralClient {
         } catch {
             throw MistralError.network(error.localizedDescription)
         }
-        guard let http = response as? HTTPURLResponse else { throw MistralError.network(String(localized: "No response from Mistral.")) }
+        guard let http = response as? HTTPURLResponse else { throw MistralError.network(String(localized: "No response from \(AIProvider.current.name).")) }
         switch http.statusCode {
         case 200..<300:
             return (data, http)
@@ -230,6 +448,10 @@ enum MistralClient {
             noteRefusal(http, data)
             throw MistralError.modelUnavailable
         case 413:
+            // Groq: a request over the tokens a minute; otherwise an upload.
+            if String(decoding: data.prefix(1000), as: UTF8.self).localizedCaseInsensitiveContains("token") {
+                throw MistralError.requestTooLarge
+            }
             throw MistralError.fileTooLarge
         case 429:
             let limit = http.value(forHTTPHeaderField: "x-ratelimit-limit-req-minute")
@@ -244,8 +466,24 @@ enum MistralClient {
             }
             throw MistralError.rateLimited
         default:
-            struct Failure: Decodable { let message: String? }
-            let message = (try? JSONDecoder().decode(Failure.self, from: data))?.message
+            // Mistral: {"message"}; Groq (OpenAI's shape): {"error": {"message"}}.
+            struct Failure: Decodable {
+                struct Inner: Decodable {
+                    let message: String?
+                    let code: String?
+                    let failed_generation: String?
+                }
+                let message: String?
+                let error: Inner?
+            }
+            let failure = try? JSONDecoder().decode(Failure.self, from: data)
+            let message = failure?.message ?? failure?.error?.message
+            if failure?.error?.code == "json_validate_failed", let answer = failure?.error?.failed_generation, !answer.isEmpty {
+                throw MistralError.unvalidatedAnswer(answer)
+            }
+            if http.statusCode == 402 || message?.localizedCaseInsensitiveContains("subscription") == true {
+                throw MistralError.noSubscription
+            }
             throw MistralError.server(message ?? String(localized: "error \(http.statusCode)"))
         }
     }
@@ -380,6 +618,13 @@ final class LyricsSummaries: ObservableObject {
         save()
     }
 
+    /// iCloud Sync: another device's summary for this song, or none.
+    func replaceEntry(_ entry: Entry?, for id: UUID) {
+        guard entries[id] != entry else { return }
+        entries[id] = entry
+        save()
+    }
+
     /// Songs with lyrics and no summary yet.
     func pending(in songs: [Song]) -> [Song] {
         songs.filter { entries[$0.id] == nil && !LyricsAutoMatcher.lacksLyrics($0) }
@@ -499,9 +744,10 @@ final class LyricsSummaries: ObservableObject {
         // turn and a refused one is set aside for a while.
         var data: Data?
         var lastError: Error = MistralError.modelUnavailable
-        for model in MistralModelMemory.usable(MistralClient.layoutModels + ["mistral-medium-latest"]) {
+        for model in MistralModelMemory.usable(AIProvider.current.summaryModels) {
             body["model"] = model
-            var request = URLRequest(url: URL(string: "https://api.mistral.ai/v1/chat/completions")!)
+            for (name, value) in AIProvider.extras(for: model) { body[name] = value }
+            var request = URLRequest(url: MistralClient.chatURL)
             request.httpMethod = "POST"
             request.timeoutInterval = 60
             request.setValue("Bearer \(key)", forHTTPHeaderField: "Authorization")

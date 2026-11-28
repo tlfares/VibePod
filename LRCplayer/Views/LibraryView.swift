@@ -66,6 +66,14 @@ struct LibraryView: View {
     @State private var isRearrangingPinned = false
     @AppStorage("hasSeenFirstImportPrompt") private var hasSeenFirstImportPrompt = false
     @State private var showFirstImportPrompt = false
+    @AppStorage(YearInMusic.earlyKey) private var yearInMusicEarly = false
+    @AppStorage("hiddenSettingsUnlocked") private var hiddenSettingsUnlocked = false
+    @State private var yearInMusicHasPlays = false
+    @State private var yearInMusic: YearInMusicData?
+
+    private var yearInMusicYear: Int? {
+        YearInMusic.year(early: yearInMusicEarly && hiddenSettingsUnlocked)
+    }
 
     private var sortMode: HomeLibrarySortMode {
         HomeLibrarySortMode(rawValue: homeSortModeRawValue) ?? .recentlyAdded
@@ -80,18 +88,30 @@ struct LibraryView: View {
             }
         }
         .pageTitle("Library")
-        .pageLeadingItem { leadingItems }
+        // The Mac's sidebar has Settings, and its title bar keeps every
+        // button on the right: all of them in the trailing capsule there.
+        .pageLeadingItem(isShown: !MacApp.isActive) {
+            leadingItems
+        }
         .pageTrailingItem {
             // The chosen shortcut, then Add, sharing one Liquid Glass capsule:
             // shortcuts sit on the inner side of both ends.
             HStack(spacing: 0) {
+                if MacApp.isActive {
+                    HomeShortcutButton(shortcut: leadingShortcut)
+                    HomeShortcutButton(shortcut: leadingShortcut2)
+                    HomeShortcutButton(shortcut: leadingShortcut3)
+                }
                 HomeShortcutButton(shortcut: trailingShortcut)
                 Menu {
                     ImportMenuItems()
                 } label: {
                     BarIcon("Add", systemImage: "plus")
                 }
+                .menuIndicator(.hidden)
             }
+            .buttonStyle(.plain)
+            .foregroundStyle(.tint)
         }
         .onChange(of: libraryVM.songs.isEmpty) { wasEmpty, isEmpty in
             if wasEmpty, !isEmpty, !hasSeenFirstImportPrompt {
@@ -112,10 +132,13 @@ struct LibraryView: View {
     /// Settings, and the chosen shortcut, sharing one Liquid Glass capsule.
     private var leadingItems: some View {
         HStack(spacing: 0) {
-            Button {
-                router.showSettings = true
-            } label: {
-                BarIcon("Settings", systemImage: "gearshape")
+            if !MacApp.isActive {
+                Button {
+                    // Beside the sidebar, Settings are its page.
+                    if router.usesSidebar { router.openSettings() } else { router.showSettings.toggle() }
+                } label: {
+                    BarIcon("Settings", systemImage: "gearshape")
+                }
             }
             HomeShortcutButton(shortcut: leadingShortcut)
             HomeShortcutButton(shortcut: leadingShortcut2)
@@ -138,6 +161,14 @@ struct LibraryView: View {
                 if !suggestions.isEmpty {
                     SuggestionsGrid(suggestions: suggestions)
                         .padding(.horizontal, 16)
+                }
+
+                if let year = yearInMusicYear, yearInMusicHasPlays {
+                    YearInMusicBanner(year: year) {
+                        yearInMusic = YearInMusicData(year: year)
+                    }
+                    .padding(.horizontal, 16)
+                    .transition(.opacity.combined(with: .scale(scale: 0.96)))
                 }
 
                 let pinned = pinnedItems
@@ -175,6 +206,14 @@ struct LibraryView: View {
             .padding(.top, 4)
             .padding(.bottom, 24)
             .onGeometryChange(for: CGFloat.self) { $0.size.width } action: { pageWidth = $0 }
+        }
+        .task(id: yearInMusicYear) {
+            let hasPlays = yearInMusicYear.map { !YearInMusic.entries(in: $0).isEmpty } ?? false
+            withAnimation(.smooth) { yearInMusicHasPlays = hasPlays }
+        }
+        .fullScreenCover(item: $yearInMusic) { data in
+            YearInMusicStory(data: data)
+                .macCoversWindow()
         }
     }
 
@@ -290,7 +329,11 @@ struct LibraryView: View {
         ContentUnavailableView {
             Label("Your Library Is Empty", systemImage: "music.note.house")
         } description: {
-            Text("Import songs from Files or from the music synced to this iPhone. LRC files with the same name are used for synced lyrics.")
+            if MacApp.isActive {
+                Text("Import songs from Files or from the Music app on this Mac. LRC files with the same name are used for synced lyrics.")
+            } else {
+                Text("Import songs from Files or from the music synced to this iPhone. LRC files with the same name are used for synced lyrics.")
+            }
         } actions: {
             Button {
                 router.importer = .audio
@@ -304,8 +347,14 @@ struct LibraryView: View {
             Button {
                 libraryVM.importPhoneMusicLibrary()
             } label: {
-                Label("Import iPhone Library", systemImage: "iphone")
-                    .frame(maxWidth: 260)
+                Group {
+                    if MacApp.isActive {
+                        Label("Import Music Library", systemImage: "music.note.house")
+                    } else {
+                        Label("Import iPhone Library", systemImage: "iphone")
+                    }
+                }
+                .frame(maxWidth: 260)
             }
             .buttonStyle(.glass)
             .controlSize(.large)
@@ -329,11 +378,21 @@ struct ImportMenuItems: View {
             Button("Import Files", systemImage: "folder.badge.plus") {
                 router.importer = .audio
             }
-            Button("Import iPhone Library", systemImage: "iphone") {
-                libraryVM.importPhoneMusicLibrary()
-            }
-            Button("Import iPhone Playlists", systemImage: "music.note.list") {
-                libraryVM.importPhoneMusicPlaylists()
+            // On the Mac, the same import reads the Music app's library.
+            if MacApp.isActive {
+                Button("Import Music Library", systemImage: "music.note.house") {
+                    libraryVM.importPhoneMusicLibrary()
+                }
+                Button("Import Music Playlists", systemImage: "music.note.list") {
+                    libraryVM.importPhoneMusicPlaylists()
+                }
+            } else {
+                Button("Import iPhone Library", systemImage: "iphone") {
+                    libraryVM.importPhoneMusicLibrary()
+                }
+                Button("Import iPhone Playlists", systemImage: "music.note.list") {
+                    libraryVM.importPhoneMusicPlaylists()
+                }
             }
         }
         Section {
@@ -362,7 +421,7 @@ enum HomeSuggestion: Identifiable {
 /// A button the Library toolbar shows next to Settings or Add, picked in
 /// Settings › Home.
 enum HomeShortcut: String, CaseIterable, Identifiable {
-    case none, assistant, games, stats, shuffleAll, autoMix, musicHaptics, animatedCovers, shuffleMode, privateListening
+    case none, assistant, games, stats, shuffleAll, autoMix, musicHaptics, animatedCovers, shuffleMode, privateListening, headGestures, volumeLeveling, equalizer, lyricsTranslation, discordStatus
 
     static let leadingKey = "homeLeadingShortcut"
     static let trailingKey = "homeTrailingShortcut"
@@ -371,15 +430,24 @@ enum HomeShortcut: String, CaseIterable, Identifiable {
     static let leading3Key = "homeLeadingShortcut3"
 
     /// What the old Games switch showed; else Music Haptics (off until
-    /// tapped) on the left, the assistant on the right.
+    /// tapped) on the left.
     static var leadingDefault: HomeShortcut {
         UserDefaults.standard.bool(forKey: "showHomeGamesButton") ? .games : .musicHaptics
     }
-    static var trailingDefault: HomeShortcut {
-        UserDefaults.standard.object(forKey: AssistantSettings.showButtonKey) as? Bool ?? true ? .assistant : .none
-    }
+    /// The assistant has its tab: nothing by default.
+    static var trailingDefault: HomeShortcut { .none }
 
     var id: Self { self }
+
+    /// Shown on this device: no haptics on the Mac, no Discord there either.
+    var isAvailable: Bool {
+        switch self {
+        case .none: false
+        case .musicHaptics: MusicHapticsService.isSupported
+        case .discordStatus: DiscordPresence.isSupported
+        default: true
+        }
+    }
 
     var title: String {
         switch self {
@@ -393,6 +461,11 @@ enum HomeShortcut: String, CaseIterable, Identifiable {
         case .animatedCovers: String(localized: "Animated Covers")
         case .shuffleMode: String(localized: "Shuffle")
         case .privateListening: String(localized: "Private Listening")
+        case .headGestures: String(localized: "AirPods Gestures")
+        case .volumeLeveling: String(localized: "Volume Leveling")
+        case .equalizer: String(localized: "Equalizer")
+        case .lyricsTranslation: String(localized: "Lyrics Translation")
+        case .discordStatus: String(localized: "Discord Status")
         }
     }
 
@@ -408,8 +481,16 @@ enum HomeShortcut: String, CaseIterable, Identifiable {
         case .animatedCovers: "play.rectangle.on.rectangle"
         case .shuffleMode: "shuffle.circle"
         case .privateListening: "eye.slash"
+        case .headGestures: "airpods.gen4"
+        case .volumeLeveling: "speaker.wave.2.circle"
+        case .equalizer: "slider.vertical.3"
+        case .lyricsTranslation: "translate"
+        case .discordStatus: "dot.radiowaves.left.and.right"
         }
     }
+
+    /// Discord's own logo (no symbol for it).
+    var assetName: String? { self == .discordStatus ? "DiscordLogo" : nil }
 }
 
 /// One toolbar shortcut. AutoMix and Music Haptics switch on and off in
@@ -424,6 +505,11 @@ struct HomeShortcutButton: View {
     @AppStorage(MusicHapticsService.appleStorageKey) private var appleHaptics = false
     @AppStorage(MotionArtworkService.storageKey) private var animatedCovers = true
     @AppStorage(PrivateListening.key) private var privateListening = false
+    @AppStorage(HeadGestures.enabledKey) private var headGestures = false
+    @AppStorage(VolumeLeveling.enabledKey) private var volumeLeveling = false
+    @AppStorage(Equalizer.enabledKey) private var equalizer = false
+    @AppStorage(LyricsTranslator.enabledKey) private var lyricsTranslation = false
+    @AppStorage(DiscordPresence.enabledKey) private var discordStatus = false
     @State private var toggles = 0
 
     var body: some View {
@@ -452,6 +538,32 @@ struct HomeShortcutButton: View {
             button(isOn: playerVM.shuffleMode == .on) { playerVM.toggleShuffle() }
         case .privateListening:
             button(isOn: privateListening) { privateListening.toggle() }
+        case .headGestures:
+            button(isOn: headGestures) {
+                headGestures.toggle()
+                HeadGestures.shared.refresh()
+            }
+            .onLongPressGesture { router.openSettings(at: .exclusive) }
+        case .volumeLeveling:
+            button(isOn: volumeLeveling) {
+                volumeLeveling.toggle()
+                if volumeLeveling, let song = MusicPlayerService.shared.currentSong { VolumeLeveling.measureIfNeeded(song) }
+                MusicPlayerService.shared.refreshVolumeLeveling()
+            }
+        case .equalizer:
+            button(isOn: equalizer) { Equalizer.setOn(!equalizer) }
+                .onLongPressGesture { router.openSettings(at: .equalizer) }
+        case .lyricsTranslation:
+            button(isOn: lyricsTranslation) { lyricsTranslation.toggle() }
+                .onLongPressGesture { router.openSettings(at: .exclusive) }
+        case .discordStatus:
+            if DiscordPresence.isSupported {
+                button(isOn: discordStatus) {
+                    discordStatus.toggle()
+                    DiscordPresence.shared.refresh()
+                }
+                .onLongPressGesture { router.openSettings(at: .exclusive) }
+            }
         case .musicHaptics:
             if MusicHapticsService.isSupported {
                 button(isOn: musicHaptics || appleHaptics) {
@@ -475,10 +587,10 @@ struct HomeShortcutButton: View {
             action()
             if isOn != nil { toggles += 1 }
         } label: {
-            BarIcon(shortcut.title, systemImage: shortcut == .privateListening && isOn == false ? "eye" : shortcut.symbol ?? "")
+            BarIcon(shortcut.title, systemImage: shortcut == .privateListening && isOn == false ? "eye" : shortcut.symbol ?? "", assetName: shortcut.assetName)
                 .overlay {
                     // Struck through while off: the symbol has no slash variant.
-                    if shortcut == .musicHaptics, isOn == false {
+                    if shortcut == .musicHaptics || shortcut == .headGestures || shortcut == .discordStatus, isOn == false {
                         Capsule().frame(width: 2, height: 24).rotationEffect(.degrees(-45))
                     }
                 }
@@ -656,7 +768,7 @@ private struct SuggestionCard: View {
                 .padding(.trailing, 8)
         }
         .frame(height: Self.side)
-        .background(Color.primary.opacity(colorScheme == .dark ? 0.1 : 0.06))
+        .background(Color.primary.opacity(colorScheme == .dark ? 0.14 : 0.08))
         .clipShape(.rect(cornerRadius: 8, style: .continuous))
         .contentShape(.rect(cornerRadius: 8, style: .continuous))
     }
@@ -1153,6 +1265,7 @@ struct HomeItemMenu: View {
                     libraryVM.presentCoversSnake(title: album.title, songs: album.songs)
                 }
             }
+            DownloadMenuSection(songs: album.songs)
             Section { addToPlaylistMenu(album.songs) }
         case let .playlist(playlist):
             Section {
@@ -1167,6 +1280,7 @@ struct HomeItemMenu: View {
                     libraryVM.presentCoversSnake(title: playlist.name, songs: libraryVM.songs(in: playlist))
                 }
             }
+            DownloadMenuSection(songs: libraryVM.songs(in: playlist))
             Section { addToPlaylistMenu(libraryVM.songs(in: playlist), excluding: playlist.id) }
             Section {
                 if playlist.isAutolist {

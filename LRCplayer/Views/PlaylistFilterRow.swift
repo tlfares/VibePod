@@ -596,10 +596,8 @@ private struct PlaylistFilterCard: View {
             WavesCard(title: String(year), palette: WavesCard.yearPalettes[entry.colorIndex % WavesCard.yearPalettes.count])
         case .genre(let name):
             let style = GenreStyle(name)
-            if let image = style.image {
-                PhotoCard(title: entry.title) { _ in
-                    Image(uiImage: image).resizable().scaledToFill()
-                }
+            if let image = style.imageName {
+                PhotoCard(title: entry.title, source: .bundled(image))
             } else {
                 GenreIllustrationCard(title: entry.title, style: style)
             }

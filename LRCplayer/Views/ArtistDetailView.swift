@@ -98,6 +98,7 @@ struct ArtistDetailView: View {
                             .onTapGesture { playerVM.play(song: song, from: songs) }
                             .contextMenu { SongContextMenu(song: song) }
                             .swipeActions(edge: .leading) { QueueSwipeButtons(song: song) }
+                            .swipeActions(edge: .trailing) { SwipeLeftButtons(song: song, context: .artist) }
                             .listRowInsets(EdgeInsets(top: 6, leading: 20, bottom: 6, trailing: 20))
                             .alignmentGuide(.listRowSeparatorLeading) { _ in 56 }
                             .listRowSeparatorTint(.white.opacity(0.14))
@@ -805,7 +806,8 @@ private struct CoverFlowCollection: UIViewRepresentable {
         private var centered = 0
         /// A tapped side cover, opened once it has slid to the center.
         private var pendingOpen: Int?
-        private let feedback = UISelectionFeedbackGenerator()
+        /// Tied to the view: on the Mac, it taps the trackpad.
+        private var feedback: UISelectionFeedbackGenerator?
 
         func collectionView(_ collectionView: UICollectionView, numberOfItemsInSection section: Int) -> Int {
             entries.count
@@ -824,7 +826,12 @@ private struct CoverFlowCollection: UIViewRepresentable {
             let index = min(max(Int((scrollView.contentOffset.x / layout.step).rounded()), 0), max(entries.count - 1, 0))
             guard index != centered else { return }
             centered = index
-            feedback.selectionChanged()
+            if MacApp.isActive {
+                MacHaptics.tick()
+            } else {
+                if feedback == nil { feedback = UISelectionFeedbackGenerator(view: scrollView) }
+                feedback?.selectionChanged(at: CGPoint(x: scrollView.bounds.midX, y: scrollView.bounds.midY))
+            }
             onCenter(index)
         }
 
@@ -1200,7 +1207,7 @@ struct GenreDetailView: View {
 
     var body: some View {
         if let genre = libraryVM.genre(named: genreName) {
-            let photo = GenreStyle(genre.name).image
+            let photo = GenreStyle(genre.name).imageName.flatMap { UIImage(named: $0) }
             SongCollectionPage(
                 title: genre.name,
                 songs: genre.songs,
@@ -1433,6 +1440,7 @@ struct SongCollectionPage: View {
                         .onTapGesture { services.playerVM.play(song: song, from: songs) }
                         .contextMenu { SongContextMenu(song: song) }
                         .swipeActions(edge: .leading) { QueueSwipeButtons(song: song) }
+                            .swipeActions(edge: .trailing) { SwipeLeftButtons(song: song, context: .artist) }
                         .listRowInsets(EdgeInsets(top: 6, leading: 20, bottom: 6, trailing: 20))
                         .alignmentGuide(.listRowSeparatorLeading) { _ in 56 }
                         .listRowSeparatorTint(.white.opacity(0.14))

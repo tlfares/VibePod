@@ -17,6 +17,8 @@ final class LibraryService: ObservableObject {
     /// Non-nil while a long library task runs (shown as a HUD).
     @Published var activityMessage: String?
     @Published var lastError: String?
+    /// After a Music library import: the songs it had to leave out, and why.
+    @Published var importNotice: String?
 
     private let songsFileName = "songs.json"
     private let playlistsFileName = "playlists.json"
@@ -39,7 +41,9 @@ final class LibraryService: ObservableObject {
         rebuildSongIndex()
         ListeningStatsService.shared.applyOnByDefault()
         seedPlayCountsFromHistory()
-        refreshAutolists()
+        // Next turn: Autolists read the imported history, which looks songs up
+        // through AppModel.shared, still being built while this runs (a crash).
+        DispatchQueue.main.async { [weak self] in self?.refreshAutolists() }
 
         NotificationCenter.default.publisher(for: UIApplication.didEnterBackgroundNotification)
             .sink { [weak self] _ in self?.flushPendingSave() }
@@ -58,6 +62,12 @@ final class LibraryService: ObservableObject {
         NotificationCenter.default.publisher(for: ListeningStatsService.historyDidChange)
             .merge(with: NotificationCenter.default.publisher(for: UIApplication.significantTimeChangeNotification))
             .sink { [weak self] _ in self?.scheduleAutolistRefresh() }
+            .store(in: &cancellables)
+        // New workouts from Health: the Workout Autolists pick again now,
+        // whatever their frequency (else they kept a pick made without them).
+        NotificationCenter.default.publisher(for: WorkoutListening.didChange)
+            .receive(on: DispatchQueue.main)
+            .sink { [weak self] _ in MainActor.assumeIsolated { self?.workoutsDidChange() } }
             .store(in: &cancellables)
 
         Task { [weak self] in
@@ -232,6 +242,72 @@ final class LibraryService: ObservableObject {
     func updateSong(_ song: Song) {
         guard let index = songIndexByID[song.id] else { return }
         songs[index] = song
+        saveLibrary()
+    }
+
+    // MARK: - Music server
+
+    /// Replaces the server's songs (and its playlists, when they came) with
+    /// a fresh listing. Local songs stay as they are.
+    func applySubsonicSync(songs remoteSongs: [Song], playlists remotePlaylists: [SubsonicService.RemotePlaylist]?) {
+        let keptIDs = Set(remoteSongs.map(\.id))
+        let gone = songs.filter { $0.isRemote && !keptIDs.contains($0.id) }
+        for song in gone {
+            ArtworkStore.remove(for: song.id)
+            try? fileManager.removeItem(at: song.playableFileURL)
+        }
+        let goneIDs = Set(gone.map(\.id))
+        var updatedPlaylists = playlists.map { playlist in
+            guard !goneIDs.isEmpty else { return playlist }
+            var playlist = playlist
+            playlist.songs.removeAll { goneIDs.contains($0) }
+            playlist.manualSongOrder?.removeAll { goneIDs.contains($0) }
+            return playlist
+        }
+        if let remotePlaylists {
+            let byRemoteID = Dictionary(remoteSongs.compactMap { song in song.remoteID.map { ($0, song.id) } }, uniquingKeysWith: { first, _ in first })
+            let service = SubsonicService.playlistService
+            let remoteIDs = Set(remotePlaylists.map(\.id))
+            updatedPlaylists.removeAll { $0.importSource?.service == service && !remoteIDs.contains($0.importSource?.playlistID ?? "") }
+            for remote in remotePlaylists {
+                let songIDs = remote.songIDs.compactMap { byRemoteID[$0] }
+                if let index = updatedPlaylists.firstIndex(where: { $0.importSource?.service == service && $0.importSource?.playlistID == remote.id }) {
+                    var playlist = updatedPlaylists[index]
+                    guard playlist.songs != songIDs || playlist.name != remote.name else { continue }
+                    playlist.name = remote.name
+                    playlist.songs = songIDs
+                    playlist.manualSongOrder = nil
+                    playlist.modifiedAt = Date()
+                    updatedPlaylists[index] = playlist
+                } else {
+                    updatedPlaylists.append(Playlist(
+                        name: remote.name,
+                        description: remote.comment,
+                        songs: songIDs,
+                        importSource: ImportSource(service: service, playlistID: remote.id, url: "", matches: [])
+                    ))
+                }
+            }
+        }
+        playlists = updatedPlaylists
+        songs = songs.filter { !$0.isRemote } + remoteSongs
+        saveLibrary()
+    }
+
+    /// Signing out of the server: its songs and playlists go.
+    func removeSubsonicContent() {
+        let remote = songs.filter(\.isRemote)
+        remote.forEach { ArtworkStore.remove(for: $0.id) }
+        let ids = Set(remote.map(\.id))
+        playlists = playlists
+            .filter { $0.importSource?.service != SubsonicService.playlistService }
+            .map { playlist in
+                var playlist = playlist
+                playlist.songs.removeAll { ids.contains($0) }
+                playlist.manualSongOrder?.removeAll { ids.contains($0) }
+                return playlist
+            }
+        songs.removeAll(where: \.isRemote)
         saveLibrary()
     }
 
@@ -420,7 +496,7 @@ final class LibraryService: ObservableObject {
         let key = "playCountsSeededFromHistory"
         guard !UserDefaults.standard.bool(forKey: key) else { return }
         UserDefaults.standard.set(true, forKey: key)
-        let entries = ListeningStatsService.shared.allEntries()
+        let entries = ListeningStatsService.shared.ownEntries()
         guard !entries.isEmpty else { return }
         var counts: [UUID: Int] = [:]
         var lastPlayed: [UUID: Date] = [:]
@@ -449,6 +525,70 @@ final class LibraryService: ObservableObject {
     // MARK: - Autolists
 
     private var pendingAutolistRefresh: DispatchWorkItem?
+
+    private static let defaultAutolistsKey = "defaultAutolistsSeeded"
+    /// Fixed IDs: two devices seeding them at once end up with the same
+    /// two playlists once synced, not four.
+    private static let defaultAutolistIDs = (
+        mostPlayed: UUID(uuidString: "6A1C2F00-5E3D-4B7A-9C11-0D5F7A3B2E01")!,
+        random: UUID(uuidString: "6A1C2F00-5E3D-4B7A-9C11-0D5F7A3B2E02")!
+    )
+
+    /// Once, with songs to pick from and no Autolist yet (a new library,
+    /// or one that never made any): 50 Most Played and 50 Random Mix.
+    private func seedDefaultAutolistsIfNeeded() {
+        let defaults = UserDefaults.standard
+        guard !defaults.bool(forKey: Self.defaultAutolistsKey), !songs.isEmpty else { return }
+        defaults.set(true, forKey: Self.defaultAutolistsKey)
+        guard !playlists.contains(where: \.isAutolist) else { return }
+        let history = AutolistEngine.HistoryCounts()
+        for (id, selection) in [(Self.defaultAutolistIDs.mostPlayed, AutolistRules.Selection.mostPlayed), (Self.defaultAutolistIDs.random, .random)]
+        where !playlists.contains(where: { $0.id == id }) {
+            var rules = AutolistRules()
+            rules.selection = selection
+            rules.limit = 50
+            var playlist = Playlist(id: id, name: rules.name, autolist: rules)
+            playlist.songs = AutolistEngine.songIDs(for: rules, in: songs, history: history)
+            playlist.autolistUpdatedAt = Date()
+            playlists.append(playlist)
+        }
+        saveLibrary()
+    }
+
+    private static let workoutAutolistKey = "workoutAutolistSeeded"
+
+    /// Health's workouts changed (first read included): a Workout Autolist
+    /// the first time, then every Workout Autolist picks again.
+    private func workoutsDidChange() {
+        let defaults = UserDefaults.standard
+        if WorkoutListening.isEnabled, !WorkoutListening.storedSessions().isEmpty,
+           !defaults.bool(forKey: Self.workoutAutolistKey) {
+            defaults.set(true, forKey: Self.workoutAutolistKey)
+            if !playlists.contains(where: { $0.autolist?.selection == .workoutFavorites }) {
+                var rules = AutolistRules()
+                rules.selection = .workoutFavorites
+                rules.limit = 50
+                createAutolist(rules)
+                return
+            }
+        }
+        guard playlists.contains(where: { $0.autolist?.selection == .workoutFavorites }) else { return }
+        let history = AutolistEngine.HistoryCounts()
+        var updated = playlists
+        var changed = false
+        for index in updated.indices {
+            guard let rules = updated[index].autolist, rules.selection == .workoutFavorites else { continue }
+            let ids = AutolistEngine.songIDs(for: rules, in: songs, history: history)
+            updated[index].autolistUpdatedAt = Date()
+            changed = true
+            guard ids != updated[index].songs else { continue }
+            updated[index].songs = ids
+            updated[index].modifiedAt = Date()
+        }
+        guard changed else { return }
+        playlists = updated
+        saveLibrary()
+    }
 
     @discardableResult
     func createAutolist(_ rules: AutolistRules) -> Playlist {
@@ -482,7 +622,8 @@ final class LibraryService: ObservableObject {
 
     /// Plays, imports and edits arrive in bursts: refresh once they settle.
     private func scheduleAutolistRefresh() {
-        guard playlists.contains(where: \.isAutolist) else { return }
+        // Before the default ones exist, too: the first songs bring them.
+        guard playlists.contains(where: \.isAutolist) || !UserDefaults.standard.bool(forKey: Self.defaultAutolistsKey) else { return }
         pendingAutolistRefresh?.cancel()
         let work = DispatchWorkItem { [weak self] in
             MainActor.assumeIsolated { self?.refreshAutolists() }
@@ -513,6 +654,7 @@ final class LibraryService: ObservableObject {
     func refreshAutolists() {
         pendingAutolistRefresh?.cancel()
         pendingAutolistRefresh = nil
+        seedDefaultAutolistsIfNeeded()
         guard playlists.contains(where: \.isAutolist) else { return }
         let now = Date()
         var history: AutolistEngine.HistoryCounts?
@@ -912,16 +1054,60 @@ final class LibraryService: ObservableObject {
 
         let lyricsFolders = [resolvedLyricsFolderURL(), lyricsDirectory].compactMap { $0 }
         let knownPersistentIDs = Set(songs.compactMap(\.mediaLibraryPersistentID)).union(SongMergeService.shared.mergedPartPersistentIDs)
-        let newSongs = await Task.detached(priority: .userInitiated) {
+        let existing = songs.filter(\.isMediaLibraryItem).map(Self.reconcilerSong)
+        let (newSongs, protected, cloudOnly) = await Task.detached(priority: .userInitiated) {
             let entries = Self.lyricsEntries(in: lyricsFolders)
-            return (MPMediaQuery.songs().items ?? []).compactMap { item -> Song? in
+            let items = MPMediaQuery.songs().items ?? []
+            // No file an app can read: Apple Music's (protected), or not
+            // downloaded to the iPhone.
+            let unreadable = items.filter { $0.assetURL == nil }
+            let protected = unreadable.filter(\.hasProtectedAsset).count
+            let created = items.compactMap { item -> Song? in
                 guard !knownPersistentIDs.contains(item.persistentID) else { return nil }
                 return Self.createSongFromMediaItem(item, lrcEntries: entries)
             }
+            // A Finder sync can copy every file again: those copies aren't
+            // new songs.
+            let copies = MediaLibraryReconciler.withoutCopies(created.map(Self.reconcilerSong), of: existing)
+            let songs = created.filter { !copies.contains($0.id) }
+            return (songs, protected, unreadable.count - protected)
         }.value
 
+        removeSongsGoneFromMediaLibrary()
+        var notes: [String] = []
+        if protected > 0 {
+            notes.append(String(localized: "Apple Music songs, protected and unplayable outside the Music app: \(protected)"))
+        }
+        if cloudOnly > 0 {
+            notes.append(String(localized: "Songs only in iCloud: \(cloudOnly). Download them in the Music app, then import again."))
+        }
+        importNotice = notes.isEmpty ? nil : notes.joined(separator: "\n\n")
         guard !newSongs.isEmpty else { return }
         songs.append(contentsOf: newSongs)
+        saveLibrary()
+    }
+
+    /// Songs deleted from the Music library go here too (after the
+    /// reconcile, which gave re-synced songs their new tracks back). Not
+    /// while the library reads empty or mostly gone: a sync in progress.
+    private func removeSongsGoneFromMediaLibrary() {
+        let present = Set((MPMediaQuery.songs().items ?? []).map(\.persistentID))
+        let imported = songs.filter(\.isMediaLibraryItem)
+        guard !present.isEmpty, !imported.isEmpty else { return }
+        let gone = imported.filter { song in
+            guard let pid = song.mediaLibraryPersistentID else { return false }
+            return !present.contains(pid)
+        }
+        guard !gone.isEmpty, gone.count * 2 <= imported.count else { return }
+        let ids = Set(gone.map(\.id))
+        songs.removeAll { ids.contains($0.id) }
+        playlists = playlists.map { playlist in
+            var updated = playlist
+            updated.songs.removeAll { ids.contains($0) }
+            updated.manualSongOrder?.removeAll { ids.contains($0) }
+            return updated
+        }
+        for id in ids { ArtworkStore.remove(for: id) }
         saveLibrary()
     }
 
@@ -972,25 +1158,14 @@ final class LibraryService: ObservableObject {
         let defaults = UserDefaults.standard
         // v2 also takes titles, artists and albums: once more over a sync
         // already checked.
-        let version = 2
+        // v3 also folds a file synced twice (two live tracks, same tags).
+        let version = 3
         let isUpToDate = defaults.integer(forKey: "mediaLibraryReconcileVersion") >= version
         if !force, isUpToDate, let checked = defaults.object(forKey: mediaLibraryReconciledKey) as? Date, checked >= modified {
             return
         }
 
-        let snapshot = songs.filter(\.isMediaLibraryItem).map { song in
-            MediaLibraryReconciler.Song(
-                id: song.id,
-                persistentID: song.mediaLibraryPersistentID,
-                title: song.title,
-                artist: song.artist,
-                album: song.album,
-                duration: song.duration,
-                trackNumber: song.trackNumber,
-                discNumber: song.discNumber,
-                addedAt: song.addedAt
-            )
-        }
+        let snapshot = songs.filter(\.isMediaLibraryItem).map(Self.reconcilerSong)
         let (tracks, plan) = await Task.detached(priority: .utility) {
             let tracks = (MPMediaQuery.songs().items ?? []).compactMap { item -> MediaLibraryReconciler.Track? in
                 guard item.persistentID != 0, let url = item.assetURL else { return nil }
@@ -1015,6 +1190,20 @@ final class LibraryService: ObservableObject {
         let byPID = Dictionary(tracks.map { ($0.persistentID, $0) }, uniquingKeysWith: { first, _ in first })
         if !plan.isEmpty { apply(plan, tracks: byPID) }
         refreshTags(from: byPID)
+    }
+
+    nonisolated private static func reconcilerSong(_ song: Song) -> MediaLibraryReconciler.Song {
+        MediaLibraryReconciler.Song(
+            id: song.id,
+            persistentID: song.mediaLibraryPersistentID,
+            title: song.title,
+            artist: song.artist,
+            album: song.album,
+            duration: song.duration,
+            trackNumber: song.trackNumber,
+            discNumber: song.discNumber,
+            addedAt: song.addedAt
+        )
     }
 
     /// Tags edited on the Mac (title, artist, album, numbers, genre, year)
@@ -1122,6 +1311,7 @@ final class LibraryService: ObservableObject {
                 return playlist
             }
             ListeningStatsService.shared.replaceSongIDs(replacements)
+            ImportedHistory.shared.replaceSongIDs(replacements)
         }
 
         songs = updated
@@ -1230,18 +1420,29 @@ final class LibraryService: ObservableObject {
     /// Unlinks the song's lyrics. Generated ones only exist for this song, so
     /// their file goes too (unless an older version shared it with another).
     func removeLRCLyrics(for song: Song) {
-        if let current = self.song(withID: song.id),
-           LyricsGenerator.isGenerated(storedPath: current.lrcFilePath),
-           !songs.contains(where: { $0.id != song.id && $0.lrcFilePath == current.lrcFilePath }),
-           let url = resolvedLyricsURL(for: current) {
+        guard let current = self.song(withID: song.id) else { return }
+        let remaining = unlinkLyrics(of: current)
+        // Told to the other devices, so iCloud doesn't bring them back.
+        if remaining == nil { LyricsRemovals.insert(song.id) }
+        setLyricsPath(remaining, for: song.id)
+    }
+
+    /// Deletes what hangs on the song's lyrics (and the file, for generated
+    /// ones) and returns the lyrics it falls back to, if any. The song's
+    /// link itself is left to the caller.
+    func unlinkLyrics(of song: Song) -> String? {
+        let generated = LyricsGenerator.isGenerated(storedPath: song.lrcFilePath)
+        if generated,
+           !songs.contains(where: { $0.id != song.id && $0.lrcFilePath == song.lrcFilePath }),
+           let url = resolvedLyricsURL(for: song) {
             try? fileManager.removeItem(at: url)
         }
         WordSyncStore.delete(for: song.id)
         LyricsSingerStore.delete(for: song.id)
         // An AI sync of unsynced lyrics: back to those.
-        let original = LyricsGenerator.isGenerated(storedPath: self.song(withID: song.id)?.lrcFilePath) ? LyricsGenerator.original(for: song.id) : nil
+        let original = generated ? LyricsGenerator.original(for: song.id) : nil
         LyricsGenerator.setOriginal(nil, for: song.id)
-        setLyricsPath(original, for: song.id)
+        return original
     }
 
     /// Where lyrics fetched or generated for `song` are written. The song's ID

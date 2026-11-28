@@ -166,12 +166,43 @@
     "%@" : {
       "shouldTranslate" : false
     },
+    "%@  %@" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%@  %@"
+          }
+        }
+      }
+    },
+    "%@ — %@" : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%@ — %@"
+          }
+        }
+      }
+    },
     "%@ · %@" : {
       "localizations" : {
         "fr" : {
           "stringUnit" : {
             "state" : "translated",
             "value" : "%1$@ · %2$@"
+          }
+        }
+      }
+    },
+    "%@ · %@ in your library" : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%@ · %@ dans votre bibliothèque"
           }
         }
       }
@@ -258,6 +289,36 @@
         }
       }
     },
+    "%@ API Key" : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Clé API %@"
+          }
+        }
+      }
+    },
+    "%@ asked to slow down. Resuming shortly…" : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%@ demande de ralentir. Reprise dans un instant…"
+          }
+        }
+      }
+    },
+    "%@ Copy" : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%@ (copie)"
+          }
+        }
+      }
+    },
     "%@ couldn't be transferred." : {
       "extractionState" : "stale",
       "localizations" : {
@@ -265,6 +326,26 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "%@ n’a pas pu être transféré."
+          }
+        }
+      }
+    },
+    "%@ couldn't build a program from that. Try describing it differently." : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%@ n’a pas pu en faire un programme. Essayez de le décrire autrement."
+          }
+        }
+      }
+    },
+    "%@ couldn't process the request: %@" : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%@ n’a pas pu traiter la demande : %@"
           }
         }
       }
@@ -299,6 +380,16 @@
         }
       }
     },
+    "%@ didn't accept the API key. Check it in Settings › Tools › AI Features." : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%@ n’a pas accepté la clé API. Vérifiez-la dans Réglages › Outils › Fonctions IA."
+          }
+        }
+      }
+    },
     "%@ didn't accept the transfer." : {
       "localizations" : {
         "fr" : {
@@ -308,6 +399,19 @@
           }
         }
       }
+    },
+    "%@ didn't accept this key. Copy it again from %@." : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%@ n’a pas accepté cette clé. Copiez-la à nouveau depuis %@."
+          }
+        }
+      }
+    },
+    "%@ h" : {
+
     },
     "%@ hertz" : {
       "localizations" : {
@@ -336,6 +440,36 @@
         }
       }
     },
+    "%@ is adding actions…" : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%@ ajoute des actions…"
+          }
+        }
+      }
+    },
+    "%@ is building your program…" : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%@ construit votre programme…"
+          }
+        }
+      }
+    },
+    "%@ is limiting requests on this key for now. Try again in a minute." : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%@ limite les requêtes sur cette clé pour l’instant. Réessayez dans une minute."
+          }
+        }
+      }
+    },
     "%@ kHz" : {
       "localizations" : {
         "fr" : {
@@ -355,6 +489,9 @@
           }
         }
       }
+    },
+    "%@ min" : {
+
     },
     "%@ not analyzed yet." : {
       "extractionState" : "stale",
@@ -380,6 +517,26 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "%1$@ sur %2$@"
+          }
+        }
+      }
+    },
+    "%@ picks from your library and writes the actions. They replace the current ones." : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%@ choisit dans votre bibliothèque et écrit les actions. Elles remplacent les actions actuelles."
+          }
+        }
+      }
+    },
+    "%@ picks from your library and writes the actions. You can change them afterwards." : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%@ choisit dans votre bibliothèque et écrit les actions. Vous pourrez les modifier ensuite."
           }
         }
       }
@@ -480,6 +637,26 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "%1$@ ignoré : absent de %2$@."
+          }
+        }
+      }
+    },
+    "%@ sums up each song's lyrics in one sentence, so the assistant finds a song by its subject and builds mixes around a theme. Visible and editable in the song's Info." : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%@ résume les paroles de chaque son en une phrase : l’assistant retrouve un son par son sujet et fait des mix par thème. Visible et modifiable dans la fiche Infos du son."
+          }
+        }
+      }
+    },
+    "%@ transcribes the vocals and syncs them to the song. The song's audio is sent to %@; you can delete the result anytime." : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%@ transcrit les voix et les synchronise avec le morceau. L’audio du morceau est envoyé à %@ ; vous pouvez supprimer le résultat à tout moment."
           }
         }
       }
@@ -785,6 +962,16 @@
         }
       }
     },
+    "%@ writes a new one the next time songs are summed up." : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%@ en écrira un nouveau au prochain résumé des sons."
+          }
+        }
+      }
+    },
     "%@, by %@" : {
       "localizations" : {
         "fr" : {
@@ -806,12 +993,43 @@
       },
       "shouldTranslate" : false
     },
+    "%@'s answer couldn't be read. Try again." : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "La réponse de %@ n’a pas pu être lue. Réessayez."
+          }
+        }
+      }
+    },
+    "%@'s larger models, with your key." : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Les plus grands modèles de %@, avec votre clé."
+          }
+        }
+      }
+    },
     "%@'s songs join the artist you pick: on its page, in Stats and for the assistant, they count as one artist. Songs still show the name their files carry." : {
       "localizations" : {
         "fr" : {
           "stringUnit" : {
             "state" : "translated",
             "value" : "Les morceaux de %@ rejoignent l’artiste choisi : sur sa page, dans les Stats et pour l’assistant, ils comptent comme un seul artiste. Les morceaux gardent le nom indiqué dans leurs fichiers."
+          }
+        }
+      }
+    },
+    "%@s" : {
+      "comment" : "A decade in a program action: from the [1990s]",
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "années %@"
           }
         }
       }
@@ -860,6 +1078,16 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "%1$lld %2$@, %3$@. Ils seront séparés à nouveau si vous réinstallez le modèle."
+          }
+        }
+      }
+    },
+    "%lld actions" : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%lld actions"
           }
         }
       }
@@ -1097,6 +1325,28 @@
                       "value" : "%arg morceaux"
                     }
                   }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "%lld already counted elsewhere" : {
+      "localizations" : {
+        "fr" : {
+          "variations" : {
+            "plural" : {
+              "one" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "%lld déjà comptée ailleurs"
+                }
+              },
+              "other" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "%lld déjà comptées ailleurs"
                 }
               }
             }
@@ -1484,6 +1734,16 @@
         }
       }
     },
+    "%lld h %lld" : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%lld h %lld"
+          }
+        }
+      }
+    },
     "%lld hr %lld min" : {
       "localizations" : {
         "en" : {
@@ -1506,6 +1766,16 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "%lld kb/s"
+          }
+        }
+      }
+    },
+    "%lld left" : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%lld restants"
           }
         }
       }
@@ -2338,6 +2608,28 @@
                 }
               }
             }
+          }
+        }
+      }
+    },
+    "%lld songs in common, like “%@” and “%@”." : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%lld morceaux en commun, dont « %@ » et « %@ »."
+          }
+        }
+      }
+    },
+    "%lld songs in common." : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%lld morceaux en commun."
           }
         }
       }
@@ -3292,6 +3584,26 @@
         }
       }
     },
+    "%lld times" : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%lld fois"
+          }
+        }
+      }
+    },
+    "%lld to check" : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%lld à vérifier"
+          }
+        }
+      }
+    },
     "%lld without lyrics" : {
       "localizations" : {
         "fr" : {
@@ -3411,8 +3723,17 @@
         }
       }
     },
+    "1 action" : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "1 action"
+          }
+        }
+      }
+    },
     "1 song" : {
-      "extractionState" : "stale",
       "localizations" : {
         "fr" : {
           "stringUnit" : {
@@ -3482,12 +3803,72 @@
         }
       }
     },
+    "A CSV of your scrobbles: artist, album, title, date." : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Un CSV de vos scrobbles : artiste, album, titre, date."
+          }
+        }
+      }
+    },
+    "A Duration" : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Une durée"
+          }
+        }
+      }
+    },
     "A merged song: each part plays its own video, with the merge's transition." : {
       "localizations" : {
         "fr" : {
           "stringUnit" : {
             "state" : "translated",
             "value" : "Morceau fusionné : chaque partie a son propre clip, enchaîné avec la transition de la fusion."
+          }
+        }
+      }
+    },
+    "A morning listener." : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Plutôt du matin."
+          }
+        }
+      }
+    },
+    "A night owl." : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Plutôt couche-tard."
+          }
+        }
+      }
+    },
+    "A Number of Songs" : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Un nombre de morceaux"
+          }
+        }
+      }
+    },
+    "A party: my most played songs shuffled, then upbeat genres for two hours." : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Une soirée : mes morceaux les plus écoutés en aléatoire, puis des genres entraînants pendant deux heures."
           }
         }
       }
@@ -3522,12 +3903,53 @@
         }
       }
     },
+    "A workout: two calm songs to warm up, then my most energetic songs shuffled, then the rest of my library." : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Une séance de sport : deux morceaux calmes pour m’échauffer, puis mes morceaux les plus énergiques en aléatoire, puis le reste de ma bibliothèque."
+          }
+        }
+      }
+    },
+    "About %lld requests with your %@ key." : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Environ %lld requêtes avec ta clé %@."
+          }
+        }
+      }
+    },
     "About %lld requests with your Mistral key." : {
+      "extractionState" : "stale",
       "localizations" : {
         "fr" : {
           "stringUnit" : {
             "state" : "translated",
             "value" : "Environ %lld requêtes avec ta clé Mistral."
+          }
+        }
+      }
+    },
+    "About %lld songs · %@" : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Environ %lld morceaux · %@"
+          }
+        }
+      }
+    },
+    "About 1 song · %@" : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Environ 1 morceau · %@"
           }
         }
       }
@@ -3572,12 +3994,42 @@
         }
       }
     },
+    "Account › Privacy › Download your data. Ask for the extended streaming history: it goes back to your first play (the account data covers one year)." : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Compte › Confidentialité › Télécharger vos données. Demandez l’historique de streaming étendu : il remonte à votre première écoute (les données du compte couvrent un an)."
+          }
+        }
+      }
+    },
+    "Account settings › Privacy › My personal data: the .xlsx file." : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Paramètres du compte › Confidentialité › Mes données personnelles : le fichier .xlsx."
+          }
+        }
+      }
+    },
     "Acoustic" : {
       "localizations" : {
         "fr" : {
           "stringUnit" : {
             "state" : "translated",
             "value" : "Acoustique"
+          }
+        }
+      }
+    },
+    "Actions" : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Actions"
           }
         }
       }
@@ -3608,6 +4060,29 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Ajouter ${songs} à ${playlist}"
+          }
+        }
+      }
+    },
+    "Add a Groq or Mistral key for fuller answers, and for the other AI features." : {
+
+    },
+    "Add Action" : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Ajouter une action"
+          }
+        }
+      }
+    },
+    "Add actions one after another: a song, an album, an artist… They play in that order, picked again every time." : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Ajoutez des actions les unes après les autres : un morceau, un album, un artiste… Elles se lisent dans cet ordre, avec des morceaux choisis à nouveau à chaque fois."
           }
         }
       }
@@ -3662,6 +4137,16 @@
         }
       }
     },
+    "Add to Stats" : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Ajouter aux stats"
+          }
+        }
+      }
+    },
     "Added" : {
       "localizations" : {
         "fr" : {
@@ -3702,6 +4187,16 @@
         }
       }
     },
+    "AirPlay" : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "AirPlay"
+          }
+        }
+      }
+    },
     "AirPods Gestures" : {
       "localizations" : {
         "fr" : {
@@ -3711,6 +4206,9 @@
           }
         }
       }
+    },
+    "Ajoutez une clé Groq ou Mistral pour des réponses plus complètes, et pour les autres fonctions IA." : {
+
     },
     "Album" : {
       "localizations" : {
@@ -3842,6 +4340,16 @@
         }
       }
     },
+    "All of it, or a few of its songs." : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "En entier, ou quelques-uns de ses morceaux."
+          }
+        }
+      }
+    },
     "All songs" : {
       "localizations" : {
         "fr" : {
@@ -3862,12 +4370,32 @@
         }
       }
     },
+    "all the songs" : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "tous les morceaux"
+          }
+        }
+      }
+    },
+    "All the Songs" : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Tous les morceaux"
+          }
+        }
+      }
+    },
     "All Time" : {
       "localizations" : {
         "fr" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Depuis toujours"
+            "value" : "Tout"
           }
         }
       }
@@ -3892,6 +4420,16 @@
         }
       }
     },
+    "Already Counted" : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Déjà comptées"
+          }
+        }
+      }
+    },
     "Already Up to Date" : {
       "localizations" : {
         "fr" : {
@@ -3909,6 +4447,26 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Toujours, en le cherchant"
+          }
+        }
+      }
+    },
+    "Amount" : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Quantité"
+          }
+        }
+      }
+    },
+    "An hour to focus: calm albums played in order, then calm songs shuffled." : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Une heure de concentration : des albums calmes dans l’ordre, puis des morceaux calmes en aléatoire."
           }
         }
       }
@@ -3983,6 +4541,16 @@
         }
       }
     },
+    "And %lld songs added to your library." : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Et %lld morceaux ajoutés à votre bibliothèque."
+          }
+        }
+      }
+    },
     "Animated Covers" : {
       "localizations" : {
         "fr" : {
@@ -3996,12 +4564,31 @@
     "Annuler" : {
       "shouldTranslate" : false
     },
+    "Annuler la demande" : {
+
+    },
+    "Annuler la modification" : {
+
+    },
     "Any" : {
       "localizations" : {
         "fr" : {
           "stringUnit" : {
             "state" : "translated",
             "value" : "Tous"
+          }
+        }
+      }
+    },
+    "API Key" : {
+
+    },
+    "API keys and music server sign-in" : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Clés d’API et connexion au serveur de musique"
           }
         }
       }
@@ -4026,7 +4613,18 @@
         }
       }
     },
+    "Apple Intelligence first, %@ as a backup." : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Apple Intelligence d’abord, %@ en renfort."
+          }
+        }
+      }
+    },
     "Apple Intelligence first, Mistral as a backup." : {
+      "extractionState" : "stale",
       "localizations" : {
         "fr" : {
           "stringUnit" : {
@@ -4042,6 +4640,16 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Apple Music n’a pas répondu, absent de Deezer"
+          }
+        }
+      }
+    },
+    "Apple Music songs, protected and unplayable outside the Music app: %lld" : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Titres Apple Music, protégés et illisibles en dehors de l’app Musique : %lld"
           }
         }
       }
@@ -4076,6 +4684,16 @@
         }
       }
     },
+    "Artist on Spotify" : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Artiste sur Spotify"
+          }
+        }
+      }
+    },
     "Artist Photo" : {
       "localizations" : {
         "fr" : {
@@ -4106,6 +4724,26 @@
         }
       }
     },
+    "Artists Not Found" : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Artistes non trouvés"
+          }
+        }
+      }
+    },
+    "Artists of the export your library doesn't have under that name." : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Les artistes de l’export que votre bibliothèque n’a pas sous ce nom."
+          }
+        }
+      }
+    },
     "Artists, Albums, Songs and More" : {
       "localizations" : {
         "fr" : {
@@ -4132,6 +4770,16 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Couleurs de la pochette"
+          }
+        }
+      }
+    },
+    "Artwork you changed" : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Pochettes modifiées"
           }
         }
       }
@@ -4186,6 +4834,17 @@
         }
       }
     },
+    "Asking Mistral about the artists…" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Mistral examine les artistes…"
+          }
+        }
+      }
+    },
     "Assistant" : {
       "localizations" : {
         "fr" : {
@@ -4196,12 +4855,42 @@
         }
       }
     },
+    "Assistant conversation and memories" : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Conversation et souvenirs de l’assistant"
+          }
+        }
+      }
+    },
     "Associate LRC…" : {
       "localizations" : {
         "fr" : {
           "stringUnit" : {
             "state" : "translated",
             "value" : "Associer un LRC…"
+          }
+        }
+      }
+    },
+    "at once" : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "d’un coup"
+          }
+        }
+      }
+    },
+    "At Once" : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "D’un coup"
           }
         }
       }
@@ -4342,6 +5031,16 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "AutoMix"
+          }
+        }
+      }
+    },
+    "Back 10 Seconds" : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Reculer de 10 secondes"
           }
         }
       }
@@ -4536,6 +5235,16 @@
         }
       }
     },
+    "Bring your listening history from Spotify, Apple Music, Deezer, YouTube Music, Last.fm or ListenBrainz into your stats. Songs are linked to the ones in your library, and what's uncertain is left for you to check." : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Ajoutez à vos stats votre historique d’écoute Spotify, Apple Music, Deezer, YouTube Music, Last.fm ou ListenBrainz. Les morceaux sont reliés à ceux de votre bibliothèque, et ce qui est incertain vous est laissé à vérifier."
+          }
+        }
+      }
+    },
     "Browse Artists" : {
       "localizations" : {
         "fr" : {
@@ -4552,6 +5261,27 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Parcourir les genres"
+          }
+        }
+      }
+    },
+    "Build Your Program" : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Construisez votre programme"
+          }
+        }
+      }
+    },
+    "by" : {
+      "comment" : "Program action: Play [all the songs] by [Artist]",
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "de"
           }
         }
       }
@@ -4606,6 +5336,22 @@
         }
       }
     },
+    "Cancel Download" : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Annuler le téléchargement"
+          }
+        }
+      }
+    },
+    "Cancel Editing" : {
+
+    },
+    "Cancel Request" : {
+
+    },
     "Cancelled" : {
       "localizations" : {
         "fr" : {
@@ -4643,6 +5389,56 @@
         }
       }
     },
+    "Change %@…" : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Changer la source…"
+          }
+        }
+      }
+    },
+    "Change Album Cover…" : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Modifier la pochette de l’album…"
+          }
+        }
+      }
+    },
+    "Change Cover…" : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Modifier la pochette…"
+          }
+        }
+      }
+    },
+    "Change Icon" : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Changer l’icône"
+          }
+        }
+      }
+    },
+    "Changes are synced on their own, in the background. Pull down to check now." : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Les modifications se synchronisent d’elles-mêmes, en arrière-plan. Tirez vers le bas pour vérifier maintenant."
+          }
+        }
+      }
+    },
     "Changes the song" : {
       "localizations" : {
         "fr" : {
@@ -4659,6 +5455,26 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Canaux"
+          }
+        }
+      }
+    },
+    "Check Songs" : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Vérifier les morceaux"
+          }
+        }
+      }
+    },
+    "Check the server address." : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Vérifiez l'adresse du serveur."
           }
         }
       }
@@ -4694,6 +5510,16 @@
         }
       }
     },
+    "Choose a Main Device" : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Choisissez un appareil principal"
+          }
+        }
+      }
+    },
     "Choose a Song" : {
       "localizations" : {
         "fr" : {
@@ -4710,6 +5536,16 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Choisir une autre pochette…"
+          }
+        }
+      }
+    },
+    "Choose Another File" : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Choisir un autre fichier"
           }
         }
       }
@@ -4731,6 +5567,16 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Choisir une autre vidéo…"
+          }
+        }
+      }
+    },
+    "Choose Artist" : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Choisir l’artiste"
           }
         }
       }
@@ -4761,6 +5607,16 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Choisir une pochette…"
+          }
+        }
+      }
+    },
+    "Choose File…" : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Choisir un fichier…"
           }
         }
       }
@@ -4865,6 +5721,16 @@
         }
       }
     },
+    "Choose Your Export" : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Choisissez votre export"
+          }
+        }
+      }
+    },
     "Classic Background Behind Lyrics" : {
       "localizations" : {
         "fr" : {
@@ -4884,6 +5750,9 @@
           }
         }
       }
+    },
+    "Clé d’API" : {
+
     },
     "Clear" : {
       "localizations" : {
@@ -4911,6 +5780,16 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Vider la file d’attente"
+          }
+        }
+      }
+    },
+    "Click and hold a shortcut, then drag it. Features with an on/off switch toggle right from the toolbar; click and hold one for its settings." : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Cliquez longuement sur un raccourci, puis faites-le glisser. Les fonctions avec un interrupteur s’activent directement depuis la barre d’outils ; cliquez longuement sur l’une d’elles pour ses réglages."
           }
         }
       }
@@ -4975,6 +5854,20 @@
         }
       }
     },
+    "Collection" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Collection"
+          }
+        }
+      }
+    },
+    "Collez votre clé" : {
+
+    },
     "Colors" : {
       "localizations" : {
         "fr" : {
@@ -5005,6 +5898,46 @@
         }
       }
     },
+    "Commute" : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Trajet"
+          }
+        }
+      }
+    },
+    "Confirm" : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Confirmer"
+          }
+        }
+      }
+    },
+    "Confirm All" : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Tout confirmer"
+          }
+        }
+      }
+    },
+    "Connect" : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Se connecter"
+          }
+        }
+      }
+    },
     "Connected" : {
       "localizations" : {
         "fr" : {
@@ -5021,6 +5954,16 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Connexion à %@…"
+          }
+        }
+      }
+    },
+    "Connecting to iCloud…" : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Connexion à iCloud…"
           }
         }
       }
@@ -5054,6 +5997,22 @@
           }
         }
       }
+    },
+    "Controls" : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Commandes"
+          }
+        }
+      }
+    },
+    "Copier" : {
+
+    },
+    "Copy" : {
+
     },
     "Core Training" : {
       "localizations" : {
@@ -5091,6 +6050,16 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Bravo !"
+          }
+        }
+      }
+    },
+    "Couldn't download “%@”" : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Impossible de télécharger « %@ »"
           }
         }
       }
@@ -5135,6 +6104,16 @@
         }
       }
     },
+    "Couldn't reach the server." : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Impossible de joindre le serveur."
+          }
+        }
+      }
+    },
     "Couldn't save the lyrics folder: %@" : {
       "localizations" : {
         "fr" : {
@@ -5171,6 +6150,16 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Nombre"
+          }
+        }
+      }
+    },
+    "Count in Stats" : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Compter dans les stats"
           }
         }
       }
@@ -5335,6 +6324,16 @@
         }
       }
     },
+    "Customize Shortcuts" : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Personnaliser les raccourcis"
+          }
+        }
+      }
+    },
     "Cut" : {
       "localizations" : {
         "fr" : {
@@ -5386,6 +6385,7 @@
       }
     },
     "Date" : {
+      "extractionState" : "stale",
       "localizations" : {
         "fr" : {
           "stringUnit" : {
@@ -5426,7 +6426,6 @@
       }
     },
     "Decades" : {
-      "extractionState" : "stale",
       "localizations" : {
         "fr" : {
           "stringUnit" : {
@@ -5516,6 +6515,16 @@
         }
       }
     },
+    "Delete Import" : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Supprimer l’import"
+          }
+        }
+      }
+    },
     "Delete Model" : {
       "localizations" : {
         "fr" : {
@@ -5532,6 +6541,16 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Supprimer la playlist"
+          }
+        }
+      }
+    },
+    "Delete Program" : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Supprimer le programme"
           }
         }
       }
@@ -5576,6 +6595,16 @@
         }
       }
     },
+    "Delete This Import?" : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Supprimer cet import ?"
+          }
+        }
+      }
+    },
     "Delete Word by Word Sync" : {
       "localizations" : {
         "fr" : {
@@ -5589,12 +6618,73 @@
     "Demande n'importe quoi" : {
       "shouldTranslate" : false
     },
+    "Describe a Program" : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Décrire un programme"
+          }
+        }
+      }
+    },
+    "Describe It to %@" : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Le décrire à %@"
+          }
+        }
+      }
+    },
+    "Describe It to Mistral" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Le décrire à Mistral"
+          }
+        }
+      }
+    },
+    "Describe the moment, the music, how long…" : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Décrivez le moment, la musique, la durée…"
+          }
+        }
+      }
+    },
     "Deselect All" : {
       "localizations" : {
         "fr" : {
           "stringUnit" : {
             "state" : "translated",
             "value" : "Tout désélectionner"
+          }
+        }
+      }
+    },
+    "Device Sync" : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Synchro entre appareils"
+          }
+        }
+      }
+    },
+    "Devices" : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Appareils"
           }
         }
       }
@@ -5638,6 +6728,36 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Numéro de disque"
+          }
+        }
+      }
+    },
+    "Discard Changes" : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Abandonner les modifications"
+          }
+        }
+      }
+    },
+    "Discard your changes?" : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Abandonner vos modifications ?"
+          }
+        }
+      }
+    },
+    "Discord connection" : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Connexion Discord"
           }
         }
       }
@@ -5708,12 +6828,32 @@
         }
       }
     },
+    "Download" : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Télécharger"
+          }
+        }
+      }
+    },
     "Download Model (%@)" : {
       "localizations" : {
         "fr" : {
           "stringUnit" : {
             "state" : "translated",
             "value" : "Télécharger le modèle (%@)"
+          }
+        }
+      }
+    },
+    "Downloads" : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Téléchargements"
           }
         }
       }
@@ -5748,12 +6888,32 @@
         }
       }
     },
+    "Drop to Import" : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Déposez pour importer"
+          }
+        }
+      }
+    },
     "Duet" : {
       "localizations" : {
         "fr" : {
           "stringUnit" : {
             "state" : "translated",
             "value" : "Duo"
+          }
+        }
+      }
+    },
+    "Duplicate" : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Dupliquer"
           }
         }
       }
@@ -5829,6 +6989,16 @@
         }
       }
     },
+    "Edit" : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Modifier"
+          }
+        }
+      }
+    },
     "Edit Autolist" : {
       "localizations" : {
         "fr" : {
@@ -5889,6 +7059,16 @@
         }
       }
     },
+    "Edit Program" : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Modifier le programme"
+          }
+        }
+      }
+    },
     "Edit…" : {
       "localizations" : {
         "fr" : {
@@ -5908,6 +7088,9 @@
           }
         }
       }
+    },
+    "Editing Message" : {
+
     },
     "Electronic" : {
       "localizations" : {
@@ -5960,6 +7143,16 @@
         }
       }
     },
+    "Ending" : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Fin"
+          }
+        }
+      }
+    },
     "Ends at (outro hidden)" : {
       "localizations" : {
         "fr" : {
@@ -5996,6 +7189,16 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Coup de boost"
+          }
+        }
+      }
+    },
+    "Enhanced" : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Enhanced"
           }
         }
       }
@@ -6050,6 +7253,16 @@
         }
       }
     },
+    "Evenings are for music." : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Plutôt le soir."
+          }
+        }
+      }
+    },
     "Every 2 Days" : {
       "localizations" : {
         "fr" : {
@@ -6076,6 +7289,16 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Tous les mois"
+          }
+        }
+      }
+    },
+    "Every play of “%@” in this import counts for the artist you choose, and its songs are matched again." : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Chaque écoute de « %@ » dans cet import compte pour l’artiste choisi, et ses morceaux sont associés à nouveau."
           }
         }
       }
@@ -6130,6 +7353,16 @@
         }
       }
     },
+    "Every song is in your library." : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Tous les morceaux sont dans votre bibliothèque."
+          }
+        }
+      }
+    },
     "Every song starts with its cover." : {
       "extractionState" : "stale",
       "localizations" : {
@@ -6177,6 +7410,36 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Tout ce qui précède « %1$@ » disparaît des paroles, et toucher ce vers lance le morceau à « %2$@ »."
+          }
+        }
+      }
+    },
+    "Everything else, to keep going." : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Tout le reste, pour continuer."
+          }
+        }
+      }
+    },
+    "Everything is stored in your private iCloud database. Keys are encrypted." : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Tout est stocké dans votre base iCloud privée. Les clés sont chiffrées."
+          }
+        }
+      }
+    },
+    "except those played before" : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "sauf ceux déjà passés"
           }
         }
       }
@@ -6247,6 +7510,37 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Rallonge du clip"
+          }
+        }
+      }
+    },
+    "Extras" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Extras"
+          }
+        }
+      }
+    },
+    "fading out" : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "en fondu"
+          }
+        }
+      }
+    },
+    "Fading Out" : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "En fondu"
           }
         }
       }
@@ -6322,12 +7616,62 @@
         }
       }
     },
+    "Fetching albums… %lld/%lld" : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Récupération des albums… %1$lld/%2$lld"
+          }
+        }
+      }
+    },
+    "Fetching covers… %lld/%lld" : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Récupération des pochettes… %1$lld/%2$lld"
+          }
+        }
+      }
+    },
     "Fetching playlist..." : {
       "localizations" : {
         "fr" : {
           "stringUnit" : {
             "state" : "translated",
             "value" : "Récupération de la playlist…"
+          }
+        }
+      }
+    },
+    "Fetching playlists…" : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Récupération des playlists…"
+          }
+        }
+      }
+    },
+    "Fetching songs…" : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Récupération des morceaux…"
+          }
+        }
+      }
+    },
+    "Fetching songs… %lld" : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Récupération des morceaux… %lld"
           }
         }
       }
@@ -6364,6 +7708,16 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Nom du fichier"
+          }
+        }
+      }
+    },
+    "Files" : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Fichiers"
           }
         }
       }
@@ -6485,32 +7839,12 @@
         }
       }
     },
-    "Find in Artists" : {
-      "localizations" : {
-        "fr" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Chercher dans les artistes"
-          }
-        }
-      }
-    },
     "Find in Playlists" : {
       "localizations" : {
         "fr" : {
           "stringUnit" : {
             "state" : "translated",
             "value" : "Chercher dans les playlists"
-          }
-        }
-      }
-    },
-    "Find in Songs" : {
-      "localizations" : {
-        "fr" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Chercher dans les morceaux"
           }
         }
       }
@@ -6561,6 +7895,16 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Recherche du début du chant…"
+          }
+        }
+      }
+    },
+    "Finding your songs…" : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Recherche de vos morceaux…"
           }
         }
       }
@@ -6616,6 +7960,16 @@
         }
       }
     },
+    "Focus" : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Concentration"
+          }
+        }
+      }
+    },
     "Follow" : {
       "localizations" : {
         "fr" : {
@@ -6636,12 +7990,53 @@
         }
       }
     },
+    "For an artist your library knows under another name, like a project and the person behind it: its plays count for the artist of your library, and its songs are matched again." : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Pour un artiste que votre bibliothèque connaît sous un autre nom, comme un projet et la personne derrière : ses écoutes comptent pour l’artiste de votre bibliothèque, et ses morceaux sont associés à nouveau."
+          }
+        }
+      }
+    },
+    "For more accurate transcription and word timing when generating or syncing lyrics. Everything else stays on %@." : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Pour une transcription et une synchronisation mot à mot plus précises lors de la génération ou de la synchronisation des paroles. Tout le reste continue de passer par %@."
+          }
+        }
+      }
+    },
     "For songs with synced lyrics, Sync Word by Word in the player's ••• menu lights each word up as it's sung, like Apple Music: Mistral's Voxtral listens to the vocals and every word of your lyrics gets its time. The lyrics' text, line breaks and LRC file stay untouched. The song's audio is sent to Mistral. The same menu hides the word by word sync (back to line by line, kept for later) or deletes it." : {
+      "extractionState" : "stale",
       "localizations" : {
         "fr" : {
           "stringUnit" : {
             "state" : "translated",
             "value" : "Pour les morceaux avec paroles synchronisées, Synchroniser mot à mot dans le menu ••• du lecteur allume chaque mot quand il est chanté, comme Apple Music : Voxtral de Mistral écoute les voix et chaque mot de vos paroles reçoit son minutage. Le texte des paroles, les retours à la ligne et le fichier LRC restent intacts. L’audio du morceau est envoyé à Mistral. Le même menu masque la synchro mot à mot (retour ligne par ligne, gardée pour plus tard) ou la supprime."
+          }
+        }
+      }
+    },
+    "For songs with synced lyrics, Sync Word by Word in the player's ••• menu lights each word up as it's sung, like Apple Music: the vocals are listened to and every word of your lyrics gets its time. The lyrics' text, line breaks and LRC file stay untouched. The song's audio is sent to the provider you chose. The same menu hides the word by word sync (back to line by line, kept for later) or deletes it." : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Pour les morceaux avec paroles synchronisées, Synchroniser mot à mot dans le menu ••• du lecteur allume chaque mot quand il est chanté, comme Apple Music : les voix sont écoutées et chaque mot de vos paroles reçoit son minutage. Le texte des paroles, les retours à la ligne et le fichier LRC restent intacts. L’audio du morceau est envoyé au fournisseur choisi. Le même menu masque la synchro mot à mot (retour ligne par ligne, gardée pour plus tard) ou la supprime."
+          }
+        }
+      }
+    },
+    "For the %lld songs of “%@”." : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Pour les %lld morceaux de « %@ »."
           }
         }
       }
@@ -6707,6 +8102,16 @@
         }
       }
     },
+    "Forward 10 Seconds" : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Avancer de 10 secondes"
+          }
+        }
+      }
+    },
     "Found on %@, without it" : {
       "localizations" : {
         "fr" : {
@@ -6717,12 +8122,39 @@
         }
       }
     },
+    "Fournisseur" : {
+
+    },
+    "Free, with daily limits." : {
+
+    },
+    "Free, with daily limits. Uses Whisper to hear the songs." : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Gratuit, avec des limites par jour. Utilise Whisper pour écouter les morceaux."
+          }
+        }
+      }
+    },
     "Free: in Google Cloud Console, turn on YouTube Data API v3 and create an API key. About 100 songs can be looked up a day; each one is looked up once." : {
       "localizations" : {
         "fr" : {
           "stringUnit" : {
             "state" : "translated",
             "value" : "Gratuit : dans Google Cloud Console, activez YouTube Data API v3 et créez une clé API. Environ 100 morceaux peuvent être recherchés par jour ; chacun ne l’est qu’une fois."
+          }
+        }
+      }
+    },
+    "from" : {
+      "comment" : "Program action: Play [3 songs] from [Album]",
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "de"
           }
         }
       }
@@ -6765,6 +8197,17 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Depuis %@ dans le lecteur, le clip YouTube du morceau remplace la pochette, avec son propre son. Vos commandes le pilotent."
+          }
+        }
+      }
+    },
+    "from the" : {
+      "comment" : "Program action: Play [all the songs] from the [1990s]",
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "des"
           }
         }
       }
@@ -6855,6 +8298,16 @@
         }
       }
     },
+    "Generate with %@" : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Générer avec %@"
+          }
+        }
+      }
+    },
     "Generate with AI (Beta)" : {
       "localizations" : {
         "fr" : {
@@ -6866,6 +8319,7 @@
       }
     },
     "Generate with Mistral AI" : {
+      "extractionState" : "stale",
       "localizations" : {
         "fr" : {
           "stringUnit" : {
@@ -6916,11 +8370,22 @@
       }
     },
     "Get a free key on console.mistral.ai" : {
+      "extractionState" : "stale",
       "localizations" : {
         "fr" : {
           "stringUnit" : {
             "state" : "translated",
             "value" : "Obtenez une clé gratuite sur console.mistral.ai"
+          }
+        }
+      }
+    },
+    "Get a key on %@" : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Obtenir une clé sur %@"
           }
         }
       }
@@ -6931,6 +8396,16 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Obtenir les morceaux de la playlist"
+          }
+        }
+      }
+    },
+    "Getting Your Export" : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Obtenir votre export"
           }
         }
       }
@@ -6975,6 +8450,9 @@
           }
         }
       }
+    },
+    "Gratuit, avec des limites quotidiennes." : {
+
     },
     "Gray" : {
       "localizations" : {
@@ -7207,6 +8685,36 @@
         }
       }
     },
+    "iCloud isn't available right now." : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "iCloud n’est pas disponible pour le moment."
+          }
+        }
+      }
+    },
+    "Icon" : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Icône"
+          }
+        }
+      }
+    },
+    "Ideas" : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Idées"
+          }
+        }
+      }
+    },
     "If the picture runs ahead of or behind the song (an intro in the clip), shift it here." : {
       "extractionState" : "stale",
       "localizations" : {
@@ -7248,12 +8756,32 @@
         }
       }
     },
+    "Import Deleted" : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Import supprimé"
+          }
+        }
+      }
+    },
     "Import Files" : {
       "localizations" : {
         "fr" : {
           "stringUnit" : {
             "state" : "translated",
             "value" : "Importer des fichiers"
+          }
+        }
+      }
+    },
+    "Import Files…" : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Importer des fichiers…"
           }
         }
       }
@@ -7288,6 +8816,46 @@
         }
       }
     },
+    "Import Listening History" : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Importer l’historique d’écoute"
+          }
+        }
+      }
+    },
+    "Import Music Library" : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Importer la bibliothèque Musique"
+          }
+        }
+      }
+    },
+    "Import Music Playlists" : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Importer les playlists Musique"
+          }
+        }
+      }
+    },
+    "Import songs from Files or from the Music app on this Mac. LRC files with the same name are used for synced lyrics." : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Importez des morceaux depuis Fichiers ou depuis l’app Musique de ce Mac. Les fichiers LRC du même nom servent de paroles synchronisées."
+          }
+        }
+      }
+    },
     "Import songs from Files or from the music synced to this iPhone. LRC files with the same name are used for synced lyrics." : {
       "localizations" : {
         "fr" : {
@@ -7308,12 +8876,42 @@
         }
       }
     },
+    "Imported" : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Imports"
+          }
+        }
+      }
+    },
     "Imported File" : {
       "localizations" : {
         "fr" : {
           "stringUnit" : {
             "state" : "translated",
             "value" : "Fichier importé"
+          }
+        }
+      }
+    },
+    "Imported listening history" : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Historique d’écoute importé"
+          }
+        }
+      }
+    },
+    "Imported plays stay out of your VibePod stats, Year in Music and Autolists, and show on their own in Stats." : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Les écoutes importées restent hors de vos stats VibePod, de l’année en musique et des autolists, et s’affichent à part dans Stats."
           }
         }
       }
@@ -7398,6 +8996,26 @@
         }
       }
     },
+    "in order" : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "dans l’ordre"
+          }
+        }
+      }
+    },
+    "In Order" : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Dans l’ordre"
+          }
+        }
+      }
+    },
     "In the player. Still buggy." : {
       "localizations" : {
         "fr" : {
@@ -7408,12 +9026,42 @@
         }
       }
     },
+    "In Your Library" : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Dans la bibliothèque"
+          }
+        }
+      }
+    },
     "Include" : {
       "localizations" : {
         "fr" : {
           "stringUnit" : {
             "state" : "translated",
             "value" : "Inclure"
+          }
+        }
+      }
+    },
+    "Include Songs Played Before" : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Inclure les morceaux déjà passés"
+          }
+        }
+      }
+    },
+    "including those played before" : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "y compris ceux déjà passés"
           }
         }
       }
@@ -7539,6 +9187,16 @@
         }
       }
     },
+    "Its plays leave your stats. Your export file isn't changed." : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Ses écoutes sortent de vos stats. Votre fichier d’export n’est pas modifié."
+          }
+        }
+      }
+    },
     "Jazz" : {
       "localizations" : {
         "fr" : {
@@ -7578,6 +9236,16 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Juste les voix, sans musique."
+          }
+        }
+      }
+    },
+    "Keep Editing" : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Continuer les modifications"
           }
         }
       }
@@ -7632,12 +9300,43 @@
         }
       }
     },
-    "Kept in this iPhone's Keychain, only sent to Mistral." : {
+    "Keep your plays, lyrics, playlists and settings the same on all your devices. Songs themselves stay on each device." : {
       "localizations" : {
         "fr" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Gardée dans le trousseau de cet iPhone, envoyée uniquement à Mistral."
+            "value" : "Gardez vos écoutes, paroles, playlists et réglages identiques sur tous vos appareils. Les morceaux eux-mêmes restent sur chaque appareil."
+          }
+        }
+      }
+    },
+    "Kept in the Keychain, only sent to %@." : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Gardée dans le trousseau, envoyée uniquement à %@."
+          }
+        }
+      }
+    },
+    "Kept in the Keychain, only sent to Mistral." : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Gardée dans le trousseau, envoyée uniquement à Mistral."
+          }
+        }
+      }
+    },
+    "Kept in the Keychain, only sent to Speechmatics." : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Conservée dans le trousseau, envoyée uniquement à Speechmatics."
           }
         }
       }
@@ -7661,6 +9360,9 @@
           }
         }
       }
+    },
+    "L’Assistant a besoin d’une clé Groq ou Mistral. Elle active aussi les autres fonctions IA." : {
+
     },
     "L'assistant s'en sert dans toutes ses réponses. Ça reste sur cet iPhone, et n'est envoyé qu'au modèle qui répond." : {
       "shouldTranslate" : false
@@ -7736,6 +9438,16 @@
         }
       }
     },
+    "Last synced %@" : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Dernière synchronisation %@"
+          }
+        }
+      }
+    },
     "Last updated %@." : {
       "localizations" : {
         "fr" : {
@@ -7802,6 +9514,46 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Laissez vide pour ne rien changer."
+          }
+        }
+      }
+    },
+    "Leave Out" : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Exclure"
+          }
+        }
+      }
+    },
+    "Leave Out of Stats" : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Exclure des stats"
+          }
+        }
+      }
+    },
+    "Leave Out Songs Played Before" : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Exclure les morceaux déjà passés"
+          }
+        }
+      }
+    },
+    "Left Out" : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Exclus"
           }
         }
       }
@@ -7887,12 +9639,92 @@
         }
       }
     },
+    "Link" : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Lier"
+          }
+        }
+      }
+    },
+    "Link “%@” to an Artist…" : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Relier « %@ » à un artiste…"
+          }
+        }
+      }
+    },
+    "Link an Artist" : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Lier un artiste"
+          }
+        }
+      }
+    },
+    "Link an Artist…" : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Lier un artiste…"
+          }
+        }
+      }
+    },
     "Link Discord" : {
       "localizations" : {
         "fr" : {
           "stringUnit" : {
             "state" : "translated",
             "value" : "Associer Discord"
+          }
+        }
+      }
+    },
+    "Link Song" : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Relier le morceau"
+          }
+        }
+      }
+    },
+    "Linked" : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Reliés"
+          }
+        }
+      }
+    },
+    "Linked Artists" : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Artistes reliés"
+          }
+        }
+      }
+    },
+    "Linked devices share everything with this one. When you link one, what this device has comes first." : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Les appareils liés partagent tout avec celui-ci. Lorsque vous en liez un, les données de cet appareil sont prioritaires."
           }
         }
       }
@@ -8279,6 +10111,16 @@
         }
       }
     },
+    "Lyrics from %@, synced by %@ • BETA" : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Paroles de %1$@, synchronisées par %2$@ • BÊTA"
+          }
+        }
+      }
+    },
     "Lyrics let it search songs by their words, explain them and sum them up." : {
       "localizations" : {
         "fr" : {
@@ -8470,12 +10312,62 @@
         }
       }
     },
+    "Lyrics, word by word sync and singers" : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Paroles, synchronisation mot à mot et chanteurs"
+          }
+        }
+      }
+    },
     "Lyrics: %@" : {
       "localizations" : {
         "fr" : {
           "stringUnit" : {
             "state" : "translated",
             "value" : "Paroles : %@"
+          }
+        }
+      }
+    },
+    "Main device" : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Appareil principal"
+          }
+        }
+      }
+    },
+    "Make Main Device" : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Définir comme principal"
+          }
+        }
+      }
+    },
+    "Make This the Main Device" : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Définir comme appareil principal"
+          }
+        }
+      }
+    },
+    "Make This the Main Device?" : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Faire de cet appareil l’appareil principal ?"
           }
         }
       }
@@ -8540,6 +10432,16 @@
         }
       }
     },
+    "Match Again" : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Relancer l’association"
+          }
+        }
+      }
+    },
     "Match Lyrics Automatically" : {
       "localizations" : {
         "fr" : {
@@ -8572,6 +10474,16 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Recherche des paroles…"
+          }
+        }
+      }
+    },
+    "Matching…" : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Association…"
           }
         }
       }
@@ -8728,6 +10640,16 @@
         }
       }
     },
+    "minutes" : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "minutes"
+          }
+        }
+      }
+    },
     "Minutes" : {
       "localizations" : {
         "fr" : {
@@ -8738,12 +10660,32 @@
         }
       }
     },
+    "Minutes Listened" : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Minutes écoutées"
+          }
+        }
+      }
+    },
     "Miss" : {
       "localizations" : {
         "fr" : {
           "stringUnit" : {
             "state" : "translated",
             "value" : "Raté"
+          }
+        }
+      }
+    },
+    "Missing" : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Absents"
           }
         }
       }
@@ -8769,6 +10711,7 @@
       }
     },
     "Mistral AI transcribes the vocals and syncs them to the song. The song's audio is sent to Mistral; you can delete the result anytime." : {
+      "extractionState" : "stale",
       "localizations" : {
         "fr" : {
           "stringUnit" : {
@@ -8779,6 +10722,7 @@
       }
     },
     "Mistral API Key" : {
+      "extractionState" : "stale",
       "localizations" : {
         "fr" : {
           "stringUnit" : {
@@ -8789,6 +10733,7 @@
       }
     },
     "Mistral asked to slow down. Resuming shortly…" : {
+      "extractionState" : "stale",
       "localizations" : {
         "fr" : {
           "stringUnit" : {
@@ -8798,7 +10743,19 @@
         }
       }
     },
+    "Mistral couldn't build a program from that. Try describing it differently." : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Mistral n’a pas pu en faire un programme. Essayez de le décrire autrement."
+          }
+        }
+      }
+    },
     "Mistral couldn't process the request: %@" : {
+      "extractionState" : "stale",
       "localizations" : {
         "fr" : {
           "stringUnit" : {
@@ -8809,6 +10766,7 @@
       }
     },
     "Mistral didn't accept the API key. Check it in Settings › Tools › AI Features." : {
+      "extractionState" : "stale",
       "localizations" : {
         "fr" : {
           "stringUnit" : {
@@ -8819,6 +10777,7 @@
       }
     },
     "Mistral didn't accept this key. Copy it again from console.mistral.ai." : {
+      "extractionState" : "stale",
       "localizations" : {
         "fr" : {
           "stringUnit" : {
@@ -8828,7 +10787,30 @@
         }
       }
     },
+    "Mistral is adding actions…" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Mistral ajoute des actions…"
+          }
+        }
+      }
+    },
+    "Mistral is building your program…" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Mistral construit votre programme…"
+          }
+        }
+      }
+    },
     "Mistral is limiting requests on this key for now. Try again in a minute." : {
+      "extractionState" : "stale",
       "localizations" : {
         "fr" : {
           "stringUnit" : {
@@ -8838,7 +10820,30 @@
         }
       }
     },
+    "Mistral picks from your library and writes the actions. They replace the current ones." : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Mistral choisit dans votre bibliothèque et écrit les actions. Elles remplacent les actions actuelles."
+          }
+        }
+      }
+    },
+    "Mistral picks from your library and writes the actions. You can change them afterwards." : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Mistral choisit dans votre bibliothèque et écrit les actions. Vous pourrez les modifier ensuite."
+          }
+        }
+      }
+    },
     "Mistral sums up each song's lyrics in one sentence, so the assistant finds a song by its subject and builds mixes around a theme. Visible and editable in the song's Info." : {
+      "extractionState" : "stale",
       "localizations" : {
         "fr" : {
           "stringUnit" : {
@@ -8849,6 +10854,7 @@
       }
     },
     "Mistral writes a new one the next time songs are summed up." : {
+      "extractionState" : "stale",
       "localizations" : {
         "fr" : {
           "stringUnit" : {
@@ -8859,6 +10865,7 @@
       }
     },
     "Mistral's larger models, with your key." : {
+      "extractionState" : "stale",
       "localizations" : {
         "fr" : {
           "stringUnit" : {
@@ -8917,6 +10924,12 @@
           }
         }
       }
+    },
+    "Modification du message" : {
+
+    },
+    "Modifier" : {
+
     },
     "Mono" : {
       "localizations" : {
@@ -9058,6 +11071,16 @@
         }
       }
     },
+    "Music all afternoon." : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "De la musique tout l'après-midi."
+          }
+        }
+      }
+    },
     "Music Haptics" : {
       "localizations" : {
         "fr" : {
@@ -9108,12 +11131,32 @@
         }
       }
     },
+    "Music Server" : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Serveur musical"
+          }
+        }
+      }
+    },
     "Music Tiles" : {
       "localizations" : {
         "fr" : {
           "stringUnit" : {
             "state" : "translated",
             "value" : "Music Tiles"
+          }
+        }
+      }
+    },
+    "Music Tiles and the Playground read the whole song: download your server songs to play them there." : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Music Tiles et le Playground lisent le morceau en entier : télécharge les morceaux du serveur pour y jouer."
           }
         }
       }
@@ -9149,6 +11192,26 @@
         }
       }
     },
+    "My commute, about 25 minutes: songs I haven’t heard in a while, then recent additions." : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Mon trajet, environ 25 minutes : des morceaux que je n’ai pas écoutés depuis longtemps, puis les ajouts récents."
+          }
+        }
+      }
+    },
+    "My Program" : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Mon programme"
+          }
+        }
+      }
+    },
     "Name" : {
       "localizations" : {
         "fr" : {
@@ -9179,7 +11242,31 @@
         }
       }
     },
+    "Navigation" : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Navigation"
+          }
+        }
+      }
+    },
+    "Nécessite un forfait API chez Mistral." : {
+
+    },
+    "Needs a %@ key in AI Features." : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Nécessite une clé %@ dans Fonctions IA."
+          }
+        }
+      }
+    },
     "Needs a Mistral key in AI Features." : {
+      "extractionState" : "stale",
       "localizations" : {
         "fr" : {
           "stringUnit" : {
@@ -9189,12 +11276,36 @@
         }
       }
     },
+    "Needs AI Features and a %@ key." : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Nécessite les fonctions IA et une clé %@."
+          }
+        }
+      }
+    },
     "Needs AI Features and a Mistral key." : {
+      "extractionState" : "stale",
       "localizations" : {
         "fr" : {
           "stringUnit" : {
             "state" : "translated",
             "value" : "Nécessite les fonctions IA et une clé Mistral."
+          }
+        }
+      }
+    },
+    "Needs an API plan on Mistral's side." : {
+
+    },
+    "Needs an API plan on Mistral's side. Uses Voxtral to hear the songs." : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Nécessite une offre API chez Mistral. Utilise Voxtral pour écouter les morceaux."
           }
         }
       }
@@ -9250,7 +11361,7 @@
       }
     },
     "Never" : {
-      "extractionState" : "stale",
+      "comment" : "Program: playback never stops",
       "localizations" : {
         "fr" : {
           "stringUnit" : {
@@ -9266,6 +11377,16 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Jamais écoutés"
+          }
+        }
+      }
+    },
+    "Never synced" : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Jamais synchronisé"
           }
         }
       }
@@ -9390,6 +11511,26 @@
         }
       }
     },
+    "New Program" : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Nouveau programme"
+          }
+        }
+      }
+    },
+    "New Program…" : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Nouveau programme…"
+          }
+        }
+      }
+    },
     "Newest to Oldest" : {
       "localizations" : {
         "fr" : {
@@ -9405,7 +11546,17 @@
         "fr" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Ensuite"
+            "value" : "Suivant"
+          }
+        }
+      }
+    },
+    "Next Line" : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Vers suivant"
           }
         }
       }
@@ -9460,12 +11611,12 @@
         }
       }
     },
-    "No Artists" : {
+    "No artist with this name on Spotify." : {
       "localizations" : {
         "fr" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Aucun artiste"
+            "value" : "Aucun artiste de ce nom sur Spotify."
           }
         }
       }
@@ -9480,12 +11631,22 @@
         }
       }
     },
-    "No Genres" : {
+    "No connection. Sync resumes on its own." : {
       "localizations" : {
         "fr" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Aucun genre"
+            "value" : "Pas de connexion. La synchronisation reprendra d’elle-même."
+          }
+        }
+      }
+    },
+    "No imported plays in this period." : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Aucune écoute importée sur cette période."
           }
         }
       }
@@ -9496,6 +11657,16 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Sans limite"
+          }
+        }
+      }
+    },
+    "No listening history was found in this file. Choose the export from Spotify, Apple Music, Deezer, YouTube Music, Last.fm or ListenBrainz, as you received it." : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Aucun historique d’écoute dans ce fichier. Choisissez l’export de Spotify, Apple Music, Deezer, YouTube Music, Last.fm ou ListenBrainz, tel que vous l’avez reçu."
           }
         }
       }
@@ -9581,6 +11752,16 @@
         }
       }
     },
+    "No lyrics found for this song. %@ can transcribe its vocals and sync them for you. The song's audio is sent to %@; you can delete the result anytime." : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Aucune parole trouvée pour ce morceau. %@ peut transcrire ses voix et les synchroniser pour vous. L’audio du morceau est envoyé à %@ ; vous pouvez supprimer le résultat à tout moment."
+          }
+        }
+      }
+    },
     "No lyrics found for this song. AI Features in Settings › Tools can generate them." : {
       "localizations" : {
         "fr" : {
@@ -9592,11 +11773,22 @@
       }
     },
     "No lyrics found for this song. Mistral AI can transcribe its vocals and sync them for you. The song's audio is sent to Mistral; you can delete the result anytime." : {
+      "extractionState" : "stale",
       "localizations" : {
         "fr" : {
           "stringUnit" : {
             "state" : "translated",
             "value" : "Aucune parole trouvée pour ce morceau. Mistral AI peut transcrire ses voix et les synchroniser pour vous. L’audio du morceau est envoyé à Mistral ; vous pouvez supprimer le résultat à tout moment."
+          }
+        }
+      }
+    },
+    "No main device yet" : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Aucun appareil principal"
           }
         }
       }
@@ -9631,7 +11823,28 @@
         }
       }
     },
+    "No releases for this artist." : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Aucune sortie pour cet artiste."
+          }
+        }
+      }
+    },
+    "No response from %@." : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Aucune réponse de %@."
+          }
+        }
+      }
+    },
     "No response from Mistral." : {
+      "extractionState" : "stale",
       "localizations" : {
         "fr" : {
           "stringUnit" : {
@@ -9681,6 +11894,16 @@
         }
       }
     },
+    "No song linked to your library." : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Aucun morceau relié à votre bibliothèque."
+          }
+        }
+      }
+    },
     "No Songs" : {
       "localizations" : {
         "fr" : {
@@ -9707,6 +11930,16 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Aucun morceau ne correspond à ces règles pour l’instant."
+          }
+        }
+      }
+    },
+    "No songs to play yet." : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Aucun morceau à lire pour l’instant."
           }
         }
       }
@@ -9842,6 +12075,16 @@
         }
       }
     },
+    "None of this program’s actions found songs in your library." : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Aucune action de ce programme n’a trouvé de morceaux dans votre bibliothèque."
+          }
+        }
+      }
+    },
     "Nope — %@ by %@" : {
       "localizations" : {
         "en" : {
@@ -9894,6 +12137,16 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Introuvable"
+          }
+        }
+      }
+    },
+    "Not in Library" : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Absent de la bibliothèque"
           }
         }
       }
@@ -9968,6 +12221,16 @@
         }
       }
     },
+    "Not This Song" : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Pas ce morceau"
+          }
+        }
+      }
+    },
     "Not Updated (%lld)" : {
       "localizations" : {
         "fr" : {
@@ -9994,6 +12257,16 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Rien n’est en lecture."
+          }
+        }
+      }
+    },
+    "Nothing left out." : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Rien n’est exclu."
           }
         }
       }
@@ -10048,6 +12321,26 @@
         }
       }
     },
+    "Nothing to check." : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Rien à vérifier."
+          }
+        }
+      }
+    },
+    "Nothing to Play" : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Rien à lire"
+          }
+        }
+      }
+    },
     "Nothing Yet" : {
       "localizations" : {
         "fr" : {
@@ -10068,6 +12361,16 @@
         }
       }
     },
+    "Now Playing" : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "À l’écoute"
+          }
+        }
+      }
+    },
     "Now replaces the queue; Next plays it after the current song; Later adds it to the end." : {
       "localizations" : {
         "fr" : {
@@ -10077,6 +12380,9 @@
           }
         }
       }
+    },
+    "Obtenir une clé sur %@" : {
+
     },
     "Ocean" : {
       "comment" : "Cover color palette",
@@ -10115,6 +12421,16 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Désactivé."
+          }
+        }
+      }
+    },
+    "Offer to Resume Playback" : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Proposer de reprendre la lecture"
           }
         }
       }
@@ -10169,6 +12485,26 @@
         }
       }
     },
+    "On Spotify" : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Sur Spotify"
+          }
+        }
+      }
+    },
+    "On the home screen before December 1st." : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Sur l'accueil avant le 1er décembre."
+          }
+        }
+      }
+    },
     "On this iPhone: private and free." : {
       "localizations" : {
         "fr" : {
@@ -10185,6 +12521,26 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Sur votre autre appareil, ouvrez Réglages › Transfert de bibliothèque › Choisir de la musique… Gardez cette page ouverte."
+          }
+        }
+      }
+    },
+    "once" : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "une fois"
+          }
+        }
+      }
+    },
+    "One" : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Un morceau"
           }
         }
       }
@@ -10215,6 +12571,16 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Un morceau"
+          }
+        }
+      }
+    },
+    "One song, as many times as you like." : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Un morceau, autant de fois que vous voulez."
           }
         }
       }
@@ -10430,6 +12796,16 @@
         }
       }
     },
+    "Optional" : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Facultatif"
+          }
+        }
+      }
+    },
     "Optional: a key from another Google Cloud project, used once the first one runs out of searches for the day." : {
       "localizations" : {
         "fr" : {
@@ -10477,6 +12853,16 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Originale"
+          }
+        }
+      }
+    },
+    "Other Service" : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Autre service"
           }
         }
       }
@@ -10564,6 +12950,26 @@
         }
       }
     },
+    "Party" : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Soirée"
+          }
+        }
+      }
+    },
+    "Password" : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Mot de passe"
+          }
+        }
+      }
+    },
     "Paste a Spotify link first." : {
       "localizations" : {
         "fr" : {
@@ -10583,6 +12989,9 @@
           }
         }
       }
+    },
+    "Paste your key" : {
+
     },
     "Pause" : {
       "localizations" : {
@@ -10665,6 +13074,16 @@
         }
       }
     },
+    "Photos" : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Photos"
+          }
+        }
+      }
+    },
     "Piano" : {
       "localizations" : {
         "fr" : {
@@ -10691,6 +13110,26 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Choisissez un morceau et celui qui le suit. Ils seront joués comme un seul, avec la transition choisie, en aléatoire aussi."
+          }
+        }
+      }
+    },
+    "Pick the device whose library is the reference, like your iPhone. Then link your other devices to it." : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Choisissez l’appareil dont la bibliothèque fait référence, par exemple votre iPhone. Liez-y ensuite vos autres appareils."
+          }
+        }
+      }
+    },
+    "Picked from how you listen." : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Choisis selon vos écoutes."
           }
         }
       }
@@ -10806,11 +13245,22 @@
       }
     },
     "Play" : {
+      "comment" : "Program action, before what plays",
       "localizations" : {
         "fr" : {
           "stringUnit" : {
             "state" : "translated",
             "value" : "Lire"
+          }
+        }
+      }
+    },
+    "Play %@" : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Lire %@"
           }
         }
       }
@@ -10915,6 +13365,46 @@
         }
       }
     },
+    "Play a Decade" : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Lire une décennie"
+          }
+        }
+      }
+    },
+    "Play a Genre" : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Lire un genre"
+          }
+        }
+      }
+    },
+    "Play a Playlist" : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Lire une playlist"
+          }
+        }
+      }
+    },
+    "Play a Song" : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Lire un morceau"
+          }
+        }
+      }
+    },
     "Play Again" : {
       "localizations" : {
         "fr" : {
@@ -10935,12 +13425,42 @@
         }
       }
     },
+    "Play an Album" : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Lire un album"
+          }
+        }
+      }
+    },
+    "Play an Artist" : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Lire un artiste"
+          }
+        }
+      }
+    },
     "Play Artist" : {
       "localizations" : {
         "fr" : {
           "stringUnit" : {
             "state" : "translated",
             "value" : "Lire l’artiste"
+          }
+        }
+      }
+    },
+    "Play From" : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Lire depuis"
           }
         }
       }
@@ -11015,6 +13535,16 @@
         }
       }
     },
+    "Play the Library" : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Lire la bibliothèque"
+          }
+        }
+      }
+    },
     "Play the Transition" : {
       "localizations" : {
         "fr" : {
@@ -11045,6 +13575,16 @@
         }
       }
     },
+    "Playback stops even if songs are left, like a sleep timer." : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "La lecture s’arrête même s’il reste des morceaux, comme une minuterie de veille."
+          }
+        }
+      }
+    },
     "Player" : {
       "localizations" : {
         "fr" : {
@@ -11071,6 +13611,16 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "À suivre"
+          }
+        }
+      }
+    },
+    "Playing on your %@" : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "En lecture sur votre %@"
           }
         }
       }
@@ -11141,6 +13691,16 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Playlists"
+          }
+        }
+      }
+    },
+    "Playlists and Autolists" : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Playlists et Autolists"
           }
         }
       }
@@ -11305,6 +13865,16 @@
         }
       }
     },
+    "Plays, play counts and stats" : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Écoutes, nombres de lectures et statistiques"
+          }
+        }
+      }
+    },
     "Pop" : {
       "localizations" : {
         "fr" : {
@@ -11405,6 +13975,16 @@
         }
       }
     },
+    "Previous Line" : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Vers précédent"
+          }
+        }
+      }
+    },
     "Previous Sessions" : {
       "localizations" : {
         "fr" : {
@@ -11445,6 +14025,19 @@
         }
       }
     },
+    "privacy.apple.com › Get a copy of your data › Apple Media Services information." : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "privacy.apple.com › Obtenir une copie de vos données › Informations sur les services multimédias Apple."
+          }
+        }
+      }
+    },
+    "Private and free, on this device. You can add a key later in AI Features." : {
+
+    },
     "Private Listening" : {
       "localizations" : {
         "fr" : {
@@ -11455,12 +14048,65 @@
         }
       }
     },
+    "Privé et gratuit, sur cet appareil. Vous pourrez ajouter une clé plus tard dans Fonctions IA." : {
+
+    },
+    "Probably the same song: another version, or a title written differently. Until confirmed, they count under their own name. Swipe to confirm, or tap to choose another song." : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Sans doute le même morceau : une autre version, ou un titre écrit autrement. Tant qu’ils ne sont pas confirmés, ils comptent sous leur propre nom. Balayez pour confirmer, ou touchez pour choisir un autre morceau."
+          }
+        }
+      }
+    },
+    "Program Name" : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Nom du programme"
+          }
+        }
+      }
+    },
+    "Programs" : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Programmes"
+          }
+        }
+      }
+    },
     "Progress" : {
       "localizations" : {
         "fr" : {
           "stringUnit" : {
             "state" : "translated",
             "value" : "Progression"
+          }
+        }
+      }
+    },
+    "Proposed" : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Proposé"
+          }
+        }
+      }
+    },
+    "Provider" : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Fournisseur"
           }
         }
       }
@@ -11481,6 +14127,16 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Mettez des AirPods compatibles pour commencer."
+          }
+        }
+      }
+    },
+    "Put it last: the rest of your library plays after the other actions." : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "À placer en dernier : le reste de votre bibliothèque se lit après les autres actions."
           }
         }
       }
@@ -11535,6 +14191,16 @@
         }
       }
     },
+    "ranked" : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "par classement"
+          }
+        }
+      }
+    },
     "Ranked" : {
       "localizations" : {
         "fr" : {
@@ -11557,6 +14223,16 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Lecture des infos des morceaux… %1$lld sur %2$lld"
+          }
+        }
+      }
+    },
+    "Reading the export…" : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Lecture de l’export…"
           }
         }
       }
@@ -11811,12 +14487,52 @@
         }
       }
     },
+    "Remove All Downloads" : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Supprimer tous les téléchargements"
+          }
+        }
+      }
+    },
+    "Remove All Downloads?" : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Supprimer tous les téléchargements ?"
+          }
+        }
+      }
+    },
     "Remove Cover" : {
       "localizations" : {
         "fr" : {
           "stringUnit" : {
             "state" : "translated",
             "value" : "Retirer la pochette"
+          }
+        }
+      }
+    },
+    "Remove Download" : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Supprimer le téléchargement"
+          }
+        }
+      }
+    },
+    "Remove Downloads" : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Supprimer les téléchargements"
           }
         }
       }
@@ -11871,12 +14587,32 @@
         }
       }
     },
+    "Rename" : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Renommer"
+          }
+        }
+      }
+    },
     "Rename ${playlist} to ${name}" : {
       "localizations" : {
         "fr" : {
           "stringUnit" : {
             "state" : "translated",
             "value" : "Renommer ${playlist} en ${name}"
+          }
+        }
+      }
+    },
+    "Rename Import" : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Renommer l’import"
           }
         }
       }
@@ -11917,6 +14653,26 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Répéter"
+          }
+        }
+      }
+    },
+    "Repeat All" : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Tout répéter"
+          }
+        }
+      }
+    },
+    "Repeat Off" : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Répétition désactivée"
           }
         }
       }
@@ -12214,7 +14970,18 @@
         }
       }
     },
+    "Runs on Groq's free plan or on Mistral, with your own key." : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Fonctionne avec l’offre gratuite de Groq ou avec Mistral, avec votre propre clé."
+          }
+        }
+      }
+    },
     "Runs on Mistral's models, with your own free key." : {
+      "extractionState" : "stale",
       "localizations" : {
         "fr" : {
           "stringUnit" : {
@@ -12294,6 +15061,16 @@
         }
       }
     },
+    "Search an Artist" : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Rechercher un artiste"
+          }
+        }
+      }
+    },
     "Search Library" : {
       "localizations" : {
         "fr" : {
@@ -12334,7 +15111,18 @@
         }
       }
     },
+    "Search: LRCLIB, KuGou, Musixmatch… • Generate: %@ (Beta), sends the audio" : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Recherche : LRCLIB, KuGou, Musixmatch… • Génération : %@ (bêta), envoie l’audio"
+          }
+        }
+      }
+    },
     "Search: LRCLIB, KuGou, Musixmatch… • Generate: Mistral AI (Beta), sends the audio" : {
+      "extractionState" : "stale",
       "localizations" : {
         "fr" : {
           "stringUnit" : {
@@ -12555,6 +15343,36 @@
         }
       }
     },
+    "Server" : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Serveur"
+          }
+        }
+      }
+    },
+    "Server songs are leveled once downloaded." : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Les morceaux du serveur sont égalisés une fois téléchargés."
+          }
+        }
+      }
+    },
+    "Server songs blend once downloaded. Streamed, they just follow each other." : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Les morceaux du serveur s'enchaînent en fondu une fois téléchargés. En streaming, ils se suivent simplement."
+          }
+        }
+      }
+    },
     "Set Shuffle and Repeat" : {
       "localizations" : {
         "fr" : {
@@ -12581,6 +15399,46 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Réglages"
+          }
+        }
+      }
+    },
+    "Settings › Export listens." : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Réglages › Exporter les écoutes."
+          }
+        }
+      }
+    },
+    "Settings that belong to one device (volume, layout, permissions)" : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Réglages propres à un appareil (volume, disposition, autorisations)"
+          }
+        }
+      }
+    },
+    "Settings, pins and game scores" : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Réglages, épingles et scores des jeux"
+          }
+        }
+      }
+    },
+    "Settings…" : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Réglages…"
           }
         }
       }
@@ -12717,6 +15575,16 @@
         }
       }
     },
+    "Show Separately" : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Afficher à part"
+          }
+        }
+      }
+    },
     "Show Video" : {
       "localizations" : {
         "fr" : {
@@ -12807,6 +15675,16 @@
         }
       }
     },
+    "Shows what was playing on another device, to pick it up here." : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Affiche ce qui était en lecture sur un autre appareil, pour le reprendre ici."
+          }
+        }
+      }
+    },
     "Shuffle" : {
       "localizations" : {
         "fr" : {
@@ -12847,6 +15725,26 @@
         }
       }
     },
+    "Shuffle Off" : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Aléatoire désactivé"
+          }
+        }
+      }
+    },
+    "Shuffle On" : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Aléatoire activé"
+          }
+        }
+      }
+    },
     "Shuffle This Artist" : {
       "localizations" : {
         "fr" : {
@@ -12857,12 +15755,62 @@
         }
       }
     },
+    "shuffled" : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "en aléatoire"
+          }
+        }
+      }
+    },
     "Shuffled" : {
       "localizations" : {
         "fr" : {
           "stringUnit" : {
             "state" : "translated",
             "value" : "Aléatoire"
+          }
+        }
+      }
+    },
+    "Sidebar" : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Barre latérale"
+          }
+        }
+      }
+    },
+    "Sign in to iCloud in the Settings app to sync." : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Connectez-vous à iCloud dans Réglages pour synchroniser."
+          }
+        }
+      }
+    },
+    "Sign Out" : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Se déconnecter"
+          }
+        }
+      }
+    },
+    "Sign Out?" : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Se déconnecter ?"
           }
         }
       }
@@ -12987,6 +15935,16 @@
         }
       }
     },
+    "Sleep" : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Sommeil"
+          }
+        }
+      }
+    },
     "Slow" : {
       "localizations" : {
         "fr" : {
@@ -13007,6 +15965,26 @@
         }
       }
     },
+    "Smart Pick" : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Sélection intelligente"
+          }
+        }
+      }
+    },
+    "Smart Picks" : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Sélections intelligentes"
+          }
+        }
+      }
+    },
     "Snippet" : {
       "localizations" : {
         "fr" : {
@@ -13023,6 +16001,16 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Foot"
+          }
+        }
+      }
+    },
+    "Some Songs Weren't Imported" : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Certains titres n’ont pas été importés"
           }
         }
       }
@@ -13053,6 +16041,37 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Nombre de morceaux"
+          }
+        }
+      }
+    },
+    "Song details you edited" : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Infos de morceaux modifiées"
+          }
+        }
+      }
+    },
+    "Song files and merged songs (use Library Transfer or the Finder)" : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Fichiers des morceaux et fusions (utilisez le transfert de bibliothèque ou le Finder)"
+          }
+        }
+      }
+    },
+    "Song of the Year" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Morceau de l'année"
           }
         }
       }
@@ -13157,12 +16176,82 @@
         }
       }
     },
+    "Songs by one artist." : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Les morceaux d’un artiste."
+          }
+        }
+      }
+    },
     "Songs From" : {
       "localizations" : {
         "fr" : {
           "stringUnit" : {
             "state" : "translated",
             "value" : "Morceaux de"
+          }
+        }
+      }
+    },
+    "Songs from a playlist or an Autolist." : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Les morceaux d’une playlist ou d’une autolist."
+          }
+        }
+      }
+    },
+    "Songs not in your library still count, under their own name. You can check and correct the links anytime." : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Les morceaux absents de votre bibliothèque comptent aussi, sous leur propre nom. Vous pouvez vérifier et corriger les liens à tout moment."
+          }
+        }
+      }
+    },
+    "Songs of one genre." : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Les morceaux d’un genre."
+          }
+        }
+      }
+    },
+    "Songs only in iCloud: %lld. Download them in the Music app, then import again." : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Titres seulement dans iCloud : %lld. Téléchargez-les dans l’app Musique, puis importez à nouveau."
+          }
+        }
+      }
+    },
+    "Songs Played Before" : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Morceaux déjà passés"
+          }
+        }
+      }
+    },
+    "Songs released in one decade." : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Les morceaux sortis pendant une décennie."
           }
         }
       }
@@ -13240,16 +16329,6 @@
         }
       }
     },
-    "Songs you import appear here." : {
-      "localizations" : {
-        "fr" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Les morceaux que vous importez apparaissent ici."
-          }
-        }
-      }
-    },
     "Songs you loved but haven’t played in a month show up here." : {
       "localizations" : {
         "fr" : {
@@ -13276,6 +16355,16 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Les morceaux écoutés au moins %lld fois, mais pas ces 30 derniers jours."
+          }
+        }
+      }
+    },
+    "Songs, Albums, Artists…" : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Morceaux, albums, artistes…"
           }
         }
       }
@@ -13340,6 +16429,79 @@
         }
       }
     },
+    "Speechmatics" : {
+
+    },
+    "Speechmatics couldn't process the request: %@" : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Speechmatics n’a pas pu traiter la demande : %@"
+          }
+        }
+      }
+    },
+    "Speechmatics couldn't transcribe this song: %@" : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Speechmatics n’a pas pu transcrire ce morceau : %@"
+          }
+        }
+      }
+    },
+    "Speechmatics didn't accept the API key. Check it in Settings › Tools › AI Features." : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Speechmatics n’a pas accepté la clé API. Vérifiez-la dans Réglages › Outils › Fonctions IA."
+          }
+        }
+      }
+    },
+    "Speechmatics didn't accept this key. Copy it again from %@." : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Speechmatics n’a pas accepté cette clé. Copiez-la à nouveau depuis %@."
+          }
+        }
+      }
+    },
+    "Speechmatics is taking too long. Try again later." : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Speechmatics met trop de temps à répondre. Réessayez plus tard."
+          }
+        }
+      }
+    },
+    "Speechmatics Model" : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Modèle Speechmatics"
+          }
+        }
+      }
+    },
+    "Speechmatics turned the song down: your account may have no credit left (%@)." : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Speechmatics a refusé le morceau : votre compte n’a peut-être plus de crédit (%@)."
+          }
+        }
+      }
+    },
     "Spoken Word" : {
       "localizations" : {
         "fr" : {
@@ -13356,6 +16518,16 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Spotify (bêta)"
+          }
+        }
+      }
+    },
+    "Spotify can't be reached." : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Impossible de joindre Spotify."
           }
         }
       }
@@ -13396,6 +16568,16 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Escaliers"
+          }
+        }
+      }
+    },
+    "Standard" : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Standard"
           }
         }
       }
@@ -13540,6 +16722,16 @@
         }
       }
     },
+    "Step %lld of %lld" : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Étape %lld sur %lld"
+          }
+        }
+      }
+    },
     "Stereo" : {
       "localizations" : {
         "fr" : {
@@ -13560,12 +16752,33 @@
         }
       }
     },
+    "Stop After" : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Arrêter après"
+          }
+        }
+      }
+    },
     "Stop Listening" : {
       "localizations" : {
         "fr" : {
           "stringUnit" : {
             "state" : "translated",
             "value" : "Arrêter l’écoute"
+          }
+        }
+      }
+    },
+    "Stop playback after" : {
+      "comment" : "Program: Stop playback after [30 min]",
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Arrêter la lecture après"
           }
         }
       }
@@ -13590,12 +16803,33 @@
         }
       }
     },
+    "Stream your own music from a Navidrome, Gonic, Airsonic or any other Subsonic-compatible server. Songs play over the network; download the ones you want offline from an album, a playlist or a song's menu." : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Écoutez votre propre musique depuis un serveur Navidrome, Gonic, Airsonic ou tout autre serveur compatible Subsonic. Les morceaux sont lus en streaming ; téléchargez ceux que vous voulez hors ligne depuis le menu d'un album, d'une playlist ou d'un morceau."
+          }
+        }
+      }
+    },
     "Strength Training" : {
       "localizations" : {
         "fr" : {
           "stringUnit" : {
             "state" : "translated",
             "value" : "Musculation"
+          }
+        }
+      }
+    },
+    "Suggested by Mistral" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Suggéré par Mistral"
           }
         }
       }
@@ -13684,6 +16918,46 @@
         }
       }
     },
+    "Swipe a Song Left" : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Balayer un morceau vers la gauche"
+          }
+        }
+      }
+    },
+    "Swiping a song right adds it to the queue. Go to Album and Go to Artist do nothing on the page they lead to." : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Balayer un morceau vers la droite l’ajoute à la file d’attente. Aller à l’album et Aller à l’artiste ne font rien sur la page où ils mènent."
+          }
+        }
+      }
+    },
+    "Sync" : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Synchroniser"
+          }
+        }
+      }
+    },
+    "Sync Paused" : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Synchronisation en pause"
+          }
+        }
+      }
+    },
     "Sync with AI" : {
       "localizations" : {
         "fr" : {
@@ -13704,6 +16978,16 @@
         }
       }
     },
+    "Sync with iCloud" : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Synchroniser avec iCloud"
+          }
+        }
+      }
+    },
     "Sync Word by Word" : {
       "localizations" : {
         "fr" : {
@@ -13720,6 +17004,26 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Synchronisé"
+          }
+        }
+      }
+    },
+    "Synced %@" : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Synchronisé %@"
+          }
+        }
+      }
+    },
+    "Synced by %@ • BETA" : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Synchronisé par %@ • BÊTA"
           }
         }
       }
@@ -13764,6 +17068,16 @@
         }
       }
     },
+    "Syncing…" : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Synchronisation…"
+          }
+        }
+      }
+    },
     "System" : {
       "localizations" : {
         "fr" : {
@@ -13780,6 +17094,16 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Barre d’onglets"
+          }
+        }
+      }
+    },
+    "takeout.google.com › YouTube and YouTube Music › history, in JSON." : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "takeout.google.com › YouTube et YouTube Music › historique, au format JSON."
           }
         }
       }
@@ -13884,6 +17208,16 @@
         }
       }
     },
+    "Tap to continue" : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Touchez pour continuer"
+          }
+        }
+      }
+    },
     "Tap to Show" : {
       "localizations" : {
         "fr" : {
@@ -13944,6 +17278,26 @@
         }
       }
     },
+    "That's %lld days of music, end to end." : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Soit %lld jours de musique sans interruption."
+          }
+        }
+      }
+    },
+    "That's %lld hours of music." : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Soit %lld heures de musique."
+          }
+        }
+      }
+    },
     "The artwork the playlist was imported with." : {
       "localizations" : {
         "fr" : {
@@ -13953,6 +17307,9 @@
           }
         }
       }
+    },
+    "The assistant needs a Groq or Mistral key. It turns on the other AI features too." : {
+
     },
     "The assistant uses these in every answer. They stay on this iPhone and only go to the model answering." : {
       "localizations" : {
@@ -13970,6 +17327,26 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Les meilleurs passages de %lld morceaux avec paroles synchronisées."
+          }
+        }
+      }
+    },
+    "The buttons of the toolbar and the tabs of the tab bar." : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Les boutons de la barre d’outils et les onglets de la barre d’onglets."
+          }
+        }
+      }
+    },
+    "The buttons of the toolbar." : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Les boutons de la barre d’outils."
           }
         }
       }
@@ -14005,12 +17382,32 @@
         }
       }
     },
+    "The cover couldn't be downloaded." : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Impossible de télécharger la pochette."
+          }
+        }
+      }
+    },
     "The covers of the first four albums in the playlist." : {
       "localizations" : {
         "fr" : {
           "stringUnit" : {
             "state" : "translated",
             "value" : "Les pochettes des quatre premiers albums de la playlist."
+          }
+        }
+      }
+    },
+    "the last song" : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "le dernier morceau"
           }
         }
       }
@@ -14125,6 +17522,46 @@
         }
       }
     },
+    "The server answered with error %lld." : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Le serveur a répondu avec l'erreur %lld."
+          }
+        }
+      }
+    },
+    "The server refused the request." : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Le serveur a refusé la requête."
+          }
+        }
+      }
+    },
+    "The server's songs, playlists and downloads leave your library. Your server isn't changed." : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Les morceaux, playlists et téléchargements du serveur quittent votre bibliothèque. Votre serveur n'est pas modifié."
+          }
+        }
+      }
+    },
+    "The sidebar lists every section of your library. In a narrow window, the tab bar comes back." : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "La barre latérale affiche toutes les sections de la bibliothèque. Dans une fenêtre étroite, la barre d’onglets revient."
+          }
+        }
+      }
+    },
     "The song couldn't be prepared." : {
       "localizations" : {
         "fr" : {
@@ -14171,6 +17608,16 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Les morceaux n’ont pas pu être lus."
+          }
+        }
+      }
+    },
+    "The songs stay in your library and stream again." : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Les morceaux restent dans votre bibliothèque et repassent en streaming."
           }
         }
       }
@@ -14265,6 +17712,16 @@
         }
       }
     },
+    "The zip as you received it, or the files inside." : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Le zip tel que vous l’avez reçu, ou les fichiers qu’il contient."
+          }
+        }
+      }
+    },
     "The zip file couldn't be read." : {
       "localizations" : {
         "fr" : {
@@ -14306,12 +17763,82 @@
         }
       }
     },
+    "These plays count for the songs of your library." : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Ces écoutes comptent pour les morceaux de votre bibliothèque."
+          }
+        }
+      }
+    },
+    "These plays don't count in your stats." : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Ces écoutes ne comptent pas dans vos stats."
+          }
+        }
+      }
+    },
+    "These songs aren't in your library: their plays count under their own name. Tap one to link it." : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Ces morceaux ne sont pas dans votre bibliothèque : leurs écoutes comptent sous leur propre nom. Touchez-en un pour le relier."
+          }
+        }
+      }
+    },
+    "This %@ key can't use the model it needs." : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Cette clé %@ ne peut pas utiliser le modèle nécessaire."
+          }
+        }
+      }
+    },
+    "This address doesn't answer like a Subsonic server." : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Cette adresse ne répond pas comme un serveur Subsonic."
+          }
+        }
+      }
+    },
     "This can take a minute." : {
       "localizations" : {
         "fr" : {
           "stringUnit" : {
             "state" : "translated",
             "value" : "Cela peut prendre une minute."
+          }
+        }
+      }
+    },
+    "This Device" : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Cet appareil"
+          }
+        }
+      }
+    },
+    "This device isn't linked" : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Cet appareil n’est pas lié"
           }
         }
       }
@@ -14326,7 +17853,18 @@
         }
       }
     },
+    "This file couldn't be read." : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Impossible de lire ce fichier."
+          }
+        }
+      }
+    },
     "This Mistral key can't use the model it needs." : {
+      "extractionState" : "stale",
       "localizations" : {
         "fr" : {
           "stringUnit" : {
@@ -14342,6 +17880,16 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Ce mois-ci"
+          }
+        }
+      }
+    },
+    "This request is too large for %@'s free limits. Try a shorter question, or start a new conversation." : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Cette demande dépasse les limites gratuites de %@. Essayez une question plus courte ou commencez une nouvelle conversation."
           }
         }
       }
@@ -14406,7 +17954,18 @@
         }
       }
     },
+    "This song's file is too large to send to %@." : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Le fichier de ce morceau est trop volumineux pour être envoyé à %@."
+          }
+        }
+      }
+    },
     "This song's file is too large to send to Mistral." : {
+      "extractionState" : "stale",
       "localizations" : {
         "fr" : {
           "stringUnit" : {
@@ -14442,6 +18001,16 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Cette année"
+          }
+        }
+      }
+    },
+    "This year, you listened for" : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Cette année, vous avez écouté"
           }
         }
       }
@@ -14487,6 +18056,7 @@
       }
     },
     "Time" : {
+      "extractionState" : "stale",
       "localizations" : {
         "fr" : {
           "stringUnit" : {
@@ -14502,6 +18072,16 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Moment de la journée"
+          }
+        }
+      }
+    },
+    "Times" : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Nombre de fois"
           }
         }
       }
@@ -14536,22 +18116,42 @@
         }
       }
     },
+    "To Check" : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "À vérifier"
+          }
+        }
+      }
+    },
+    "To fall asleep: my calmest songs, softly, and stop after 30 minutes with a fade." : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Pour m’endormir : mes morceaux les plus calmes, tout doucement, et arrêter au bout de 30 minutes en fondu."
+          }
+        }
+      }
+    },
+    "To Keep Going" : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Pour continuer"
+          }
+        }
+      }
+    },
     "Today's YouTube searches are used up. Try again tomorrow, or add a backup key in Settings › Extras › YouTube Videos." : {
       "localizations" : {
         "fr" : {
           "stringUnit" : {
             "state" : "translated",
             "value" : "Les recherches YouTube du jour sont épuisées. Réessayez demain, ou ajoutez une clé de secours dans Réglages › Extras › Vidéos YouTube."
-          }
-        }
-      }
-    },
-    "Toolbar Shortcuts" : {
-      "localizations" : {
-        "fr" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Raccourcis de la barre d’outils"
           }
         }
       }
@@ -14586,6 +18186,16 @@
         }
       }
     },
+    "Top Genre" : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Genre favori"
+          }
+        }
+      }
+    },
     "Top Songs" : {
       "localizations" : {
         "fr" : {
@@ -14606,7 +18216,18 @@
         }
       }
     },
+    "Touch and hold a shortcut or a tab, then drag it. Features with an on/off switch toggle right from the toolbar; touch and hold one for its settings." : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Maintenez le doigt sur un raccourci ou un onglet, puis faites-le glisser. Les fonctions avec un interrupteur s’activent directement depuis la barre d’outils ; maintenez le doigt sur l’une d’elles pour ses réglages."
+          }
+        }
+      }
+    },
     "Touch and hold a shortcut, then drag it into a slot, between them or out of the bar. AutoMix and Music Haptics switch on and off right from the toolbar." : {
+      "extractionState" : "stale",
       "localizations" : {
         "fr" : {
           "stringUnit" : {
@@ -14622,16 +18243,6 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Maintenez une suggestion sur l’accueil pour ne plus la recommander."
-          }
-        }
-      }
-    },
-    "Touch and hold a tab, then drag it into the bar, around or out of it. Library and Search keep their ends." : {
-      "localizations" : {
-        "fr" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Maintenez le doigt sur un onglet, puis faites-le glisser dans la barre, à l’intérieur ou hors de celle-ci. Bibliothèque et Recherche restent aux extrémités."
           }
         }
       }
@@ -14692,7 +18303,18 @@
         }
       }
     },
+    "Transcribed and synced by %@ • BETA" : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Transcrit et synchronisé par %@ • BÊTA"
+          }
+        }
+      }
+    },
     "Transcribed and synced by AI (Mistral) • BETA" : {
+      "extractionState" : "stale",
       "localizations" : {
         "fr" : {
           "stringUnit" : {
@@ -14858,6 +18480,16 @@
         }
       }
     },
+    "Turn on AI Features and add a %@ API key in Settings › Tools." : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Activez les fonctions IA et ajoutez une clé API %@ dans Réglages › Outils."
+          }
+        }
+      }
+    },
     "Turn on AI Features and add a Mistral API key in Settings › Tools." : {
       "localizations" : {
         "fr" : {
@@ -14868,12 +18500,33 @@
         }
       }
     },
+    "Turn on AI Features in Settings › Tools to have %@ transcribe and sync this song's lyrics." : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Activez les fonctions IA dans Réglages › Outils pour que %@ transcrive et synchronise les paroles de ce morceau."
+          }
+        }
+      }
+    },
     "Turn on AI Features in Settings › Tools to have Mistral AI transcribe and sync this song's lyrics." : {
+      "extractionState" : "stale",
       "localizations" : {
         "fr" : {
           "stringUnit" : {
             "state" : "translated",
             "value" : "Activez les fonctions IA dans Réglages › Outils pour que Mistral AI transcrive et synchronise les paroles de ce morceau."
+          }
+        }
+      }
+    },
+    "Turn on Device Sync on a device, then link it here or from the main device." : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Activez la synchro entre appareils sur un appareil, puis liez-le ici ou depuis l’appareil principal."
           }
         }
       }
@@ -14934,6 +18587,16 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Active ou désactive la lecture aléatoire de LRCplayer et règle la répétition (désactivée, tout, ou le morceau en cours)."
+          }
+        }
+      }
+    },
+    "twice" : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "deux fois"
           }
         }
       }
@@ -15089,6 +18752,16 @@
         }
       }
     },
+    "Up to Date" : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "À jour"
+          }
+        }
+      }
+    },
     "Up-Tempo" : {
       "localizations" : {
         "fr" : {
@@ -15118,6 +18791,42 @@
           }
         }
       }
+    },
+    "Use" : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Utiliser"
+          }
+        }
+      }
+    },
+    "Use Apple's Model" : {
+
+    },
+    "Use the same Apple Account on each device, then turn this on everywhere." : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Utilisez le même compte Apple sur chaque appareil, puis activez cette option partout."
+          }
+        }
+      }
+    },
+    "Username" : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Nom d'utilisateur"
+          }
+        }
+      }
+    },
+    "Utiliser le modèle d’Apple" : {
+
     },
     "Very Fast" : {
       "localizations" : {
@@ -15236,6 +18945,16 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Voix"
+          }
+        }
+      }
+    },
+    "Volume" : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Volume"
           }
         }
       }
@@ -15390,7 +19109,18 @@
         }
       }
     },
+    "What the assistant reads about this song. Once edited, %@ never rewrites it." : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Ce que l’assistant lit sur ce son. Une fois modifié, %@ ne le réécrit plus."
+          }
+        }
+      }
+    },
     "What the assistant reads about this song. Once edited, Mistral never rewrites it." : {
+      "extractionState" : "stale",
       "localizations" : {
         "fr" : {
           "stringUnit" : {
@@ -15430,6 +19160,26 @@
         }
       }
     },
+    "What's playing, to pick it up elsewhere" : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "La lecture en cours, pour la reprendre ailleurs"
+          }
+        }
+      }
+    },
+    "What's Synced" : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Ce qui est synchronisé"
+          }
+        }
+      }
+    },
     "When" : {
       "localizations" : {
         "fr" : {
@@ -15440,12 +19190,43 @@
         }
       }
     },
+    "When a device is linked, what this device has comes first." : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Lorsqu’un appareil est lié, les données de cet appareil sont prioritaires."
+          }
+        }
+      }
+    },
+    "When It Ends" : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "À la fin"
+          }
+        }
+      }
+    },
     "When neither an LRC file nor LRCLIB has a song's lyrics, the No Results popup (or the end of LRCLIB's results) offers to generate them: Mistral's Voxtral transcribes the vocals a minute at a time, then they're laid out in short lines synced to the song. The song's audio is sent to Mistral. Results vary with the mix; Delete AI Lyrics in the song's ••• menu removes them from the app." : {
+      "extractionState" : "stale",
       "localizations" : {
         "fr" : {
           "stringUnit" : {
             "state" : "translated",
             "value" : "Quand ni un fichier LRC ni LRCLIB n’a les paroles d’un morceau, la fenêtre Aucun résultat (ou la fin des résultats LRCLIB) propose de les générer : Voxtral de Mistral transcrit les voix minute par minute, puis elles sont découpées en lignes courtes synchronisées avec le morceau. L’audio du morceau est envoyé à Mistral. Les résultats varient selon le mixage ; Supprimer les paroles IA dans le menu ••• du morceau les retire de l’app."
+          }
+        }
+      }
+    },
+    "When neither an LRC file nor LRCLIB has a song's lyrics, the No Results popup (or the end of LRCLIB's results) offers to generate them: the vocals are transcribed, then laid out in short lines synced to the song. The song's audio is sent to the provider you chose. Results vary with the mix; Delete AI Lyrics in the song's ••• menu removes them from the app." : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Quand ni un fichier LRC ni LRCLIB n’a les paroles d’un morceau, la fenêtre Aucun résultat (ou la fin des résultats LRCLIB) propose de les générer : les voix sont transcrites, puis découpées en lignes courtes synchronisées avec le morceau. L’audio du morceau est envoyé au fournisseur choisi. Les résultats varient selon le mixage ; Supprimer les paroles IA dans le menu ••• du morceau les retire de l’app."
           }
         }
       }
@@ -15487,6 +19268,16 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Blanc"
+          }
+        }
+      }
+    },
+    "Who Is “%@”?" : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Qui est « %@ » ?"
           }
         }
       }
@@ -15643,11 +19434,22 @@
       }
     },
     "Words synced by AI (Mistral) • BETA" : {
+      "extractionState" : "stale",
       "localizations" : {
         "fr" : {
           "stringUnit" : {
             "state" : "translated",
             "value" : "Mots synchronisés par IA (Mistral) • BÊTA"
+          }
+        }
+      }
+    },
+    "Words synced by AI • BETA" : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Mots synchronisés par IA • BÊTA"
           }
         }
       }
@@ -15682,12 +19484,33 @@
         }
       }
     },
+    "Written by %@ from the lyrics, for the assistant. Edit it if it's wrong; empty it to remove it." : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Écrit par %@ à partir des paroles, pour l’assistant. Modifie-le s’il se trompe, vide-le pour le supprimer."
+          }
+        }
+      }
+    },
     "Written by Mistral from the lyrics, for the assistant. Edit it if it's wrong; empty it to remove it." : {
+      "extractionState" : "stale",
       "localizations" : {
         "fr" : {
           "stringUnit" : {
             "state" : "translated",
             "value" : "Écrit par Mistral à partir des paroles, pour l’assistant. Modifie-le s’il se trompe, vide-le pour le supprimer."
+          }
+        }
+      }
+    },
+    "Wrong username or password." : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Nom d'utilisateur ou mot de passe incorrect."
           }
         }
       }
@@ -15708,6 +19531,26 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Année"
+          }
+        }
+      }
+    },
+    "Year in Music" : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Année en musique"
+          }
+        }
+      }
+    },
+    "Year in Music Now" : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Année en musique dès maintenant"
           }
         }
       }
@@ -15802,6 +19645,56 @@
         }
       }
     },
+    "Your %@ account has no active API plan. Choose one in its console (%@), or use another provider in Settings › Tools › AI Features." : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Votre compte %@ n’a pas d’offre API active. Choisissez-en une dans sa console (%@), ou utilisez un autre fournisseur dans Réglages › Outils › Fonctions IA."
+          }
+        }
+      }
+    },
+    "Your %@ in Music" : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Votre %@ en musique"
+          }
+        }
+      }
+    },
+    "Your Album of the Year" : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Votre album de l'année"
+          }
+        }
+      }
+    },
+    "Your Artist of the Year" : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Votre artiste de l'année"
+          }
+        }
+      }
+    },
+    "Your biggest month" : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Votre plus gros mois"
+          }
+        }
+      }
+    },
     "Your busiest day is %@." : {
       "localizations" : {
         "fr" : {
@@ -15832,12 +19725,94 @@
         }
       }
     },
-    "Your key stays private on this iPhone, in its Keychain: it isn't synced to iCloud nor included in backups, and it's only ever sent to Mistral, when you use an AI feature." : {
+    "Your export is read on this iPhone. Only artist names may go to %@, when AI features are on, to spot an artist known under another name." : {
       "localizations" : {
         "fr" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Votre clé reste privée sur cet iPhone, dans son trousseau : elle n’est ni synchronisée avec iCloud ni incluse dans les sauvegardes, et n’est envoyée qu’à Mistral, quand vous utilisez une fonction IA."
+            "value" : "Votre export est lu sur cet iPhone. Seuls des noms d’artistes peuvent être envoyés à %@, si les fonctions IA sont activées, pour repérer un artiste connu sous un autre nom."
+          }
+        }
+      }
+    },
+    "Your export is read on this iPhone. Only artist names may go to Mistral, when AI features are on, to spot an artist known under another name." : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Votre export est lu sur cet iPhone. Seuls des noms d’artistes peuvent être envoyés à Mistral, si les fonctions IA sont activées, pour repérer un artiste connu sous un autre nom."
+          }
+        }
+      }
+    },
+    "Your favorite day" : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Votre jour préféré"
+          }
+        }
+      }
+    },
+    "Your Genres" : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Vos genres"
+          }
+        }
+      }
+    },
+    "Your iCloud storage is full." : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Votre stockage iCloud est plein."
+          }
+        }
+      }
+    },
+    "Your key stays private, in the Keychain, and is only sent to Speechmatics, with the song's vocals (or the song itself), when lyrics are generated or synced word by word. Each transcription is deleted from Speechmatics as soon as it's back. With Device Sync, the key goes to your other devices through your private, encrypted iCloud database." : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Votre clé reste privée, dans le trousseau, et n’est envoyée qu’à Speechmatics, avec les voix du morceau (ou le morceau lui-même), lors de la génération ou de la synchronisation mot à mot des paroles. Chaque transcription est supprimée de Speechmatics dès son retour. Avec la synchronisation des appareils, la clé rejoint vos autres appareils via votre base iCloud privée et chiffrée."
+          }
+        }
+      }
+    },
+    "Your key stays private, in the Keychain: it isn't included in backups and it's only ever sent to %@, when you use an AI feature. With Device Sync, it goes to your other devices through your private, encrypted iCloud database." : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Votre clé reste privée, dans le trousseau : elle n’est pas incluse dans les sauvegardes et n’est envoyée qu’à %@, quand vous utilisez une fonction IA. Avec la synchro entre appareils, elle rejoint vos autres appareils via votre base iCloud privée et chiffrée."
+          }
+        }
+      }
+    },
+    "Your key stays private, in the Keychain: it isn't included in backups and it's only ever sent to Mistral, when you use an AI feature. With Device Sync, it goes to your other devices through your private, encrypted iCloud database." : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Votre clé reste privée, dans le trousseau : elle n’est pas incluse dans les sauvegardes et n’est envoyée qu’à Mistral, quand vous utilisez une fonction IA. Avec la synchro entre appareils, elle rejoint vos autres appareils via votre base iCloud privée et chiffrée."
+          }
+        }
+      }
+    },
+    "your library" : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "votre bibliothèque"
           }
         }
       }
@@ -15882,6 +19857,27 @@
         }
       }
     },
+    "Your Listening Habits" : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Vos habitudes d'écoute"
+          }
+        }
+      }
+    },
+    "Your Mistral account has no active API plan. Choose one, even the free one, in Mistral's console (console.mistral.ai), then try again." : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Votre compte Mistral n’a pas d’offre API active. Choisissez-en une, même gratuite, dans la console Mistral (console.mistral.ai), puis réessayez."
+          }
+        }
+      }
+    },
     "Your most energetic songs, measured from their sound." : {
       "extractionState" : "stale",
       "localizations" : {
@@ -15913,6 +19909,16 @@
         }
       }
     },
+    "Your music hour" : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Votre heure d'écoute"
+          }
+        }
+      }
+    },
     "Your photo." : {
       "localizations" : {
         "fr" : {
@@ -15933,12 +19939,72 @@
         }
       }
     },
+    "Your Song of the Year" : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Votre morceau de l'année"
+          }
+        }
+      }
+    },
+    "Your songs stay in your library." : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Vos morceaux restent dans votre bibliothèque."
+          }
+        }
+      }
+    },
+    "Your Top Artists" : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Vos artistes les plus écoutés"
+          }
+        }
+      }
+    },
+    "Your Top Songs" : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Vos morceaux les plus écoutés"
+          }
+        }
+      }
+    },
+    "Your top songs, artists and more." : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Vos morceaux, vos artistes et plus encore."
+          }
+        }
+      }
+    },
     "Your workouts from Apple Health tell it what you play while you exercise." : {
       "localizations" : {
         "fr" : {
           "stringUnit" : {
             "state" : "translated",
             "value" : "Tes entraînements dans Santé lui disent ce que tu écoutes pendant le sport."
+          }
+        }
+      }
+    },
+    "Your Year in Music" : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Votre année en musique"
           }
         }
       }

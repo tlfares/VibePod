@@ -32,7 +32,7 @@ final class LyricsGenerator: ObservableObject {
 
         var errorDescription: String? {
             switch self {
-            case .unavailable: String(localized: "Turn on AI Features and add a Mistral API key in Settings › Tools.")
+            case .unavailable: String(localized: "Turn on AI Features and add a \(AIProvider.current.name) API key in Settings › Tools.")
             case .unreadableAudio: String(localized: "This song's audio couldn't be read.")
             case .noVocals: String(localized: "No vocals were heard in this song.")
             }
@@ -69,6 +69,28 @@ final class LyricsGenerator: ObservableObject {
         (UserDefaults.standard.dictionary(forKey: originalsKey) as? [String: String])?[songID.uuidString]
     }
 
+    /// Where imported lyrics came from (LRCLIB, …), by stored path: an AI
+    /// sync of them names it under the lyrics.
+    private static let sourcesKey = "lyricsSourcesByPath"
+
+    static func setSource(_ name: String?, forStoredPath path: String) {
+        var sources = UserDefaults.standard.dictionary(forKey: sourcesKey) as? [String: String] ?? [:]
+        sources[path] = name
+        UserDefaults.standard.set(sources, forKey: sourcesKey)
+    }
+
+    static func source(forStoredPath path: String?) -> String? {
+        guard let path else { return nil }
+        return (UserDefaults.standard.dictionary(forKey: sourcesKey) as? [String: String])?[path]
+    }
+
+    /// The source of the lyrics an AI sync starts from: the file itself,
+    /// or for lyrics already synced, the ones they replaced.
+    static func textSource(for song: Song) -> String? {
+        if isGenerated(storedPath: song.lrcFilePath) { return source(forStoredPath: original(for: song.id)) }
+        return source(forStoredPath: song.lrcFilePath)
+    }
+
     static func isGenerated(storedPath: String?) -> Bool {
         guard let storedPath else { return false }
         return storedPath.contains("Lyrics/\(folderName)/")
@@ -88,7 +110,12 @@ final class LyricsGenerator: ObservableObject {
         stages[song.id] = .preparing
         Task {
             do {
-                let chunks = try await Self.audioChunks(at: song.playableFileURL, duration: song.duration)
+                guard await SubsonicDownloads.shared.ensureLocal(song) else {
+                    failures[song.id] = String(localized: "Couldn't download “\(song.title)”")
+                    stages[song.id] = nil
+                    return
+                }
+                let chunks = try await Self.audioChunks(for: song)
                 defer { chunks.filter(\.isTemporary).forEach { try? FileManager.default.removeItem(at: $0.url) } }
 
                 stages[song.id] = .transcribing(part: 0, of: chunks.count)
@@ -183,8 +210,12 @@ final class LyricsGenerator: ObservableObject {
         let results = try await withThrowingTaskGroup(of: (Int, [TimedWord]).self) { group in
             for (index, chunk) in chunks.enumerated() {
                 let url = chunk.url
+                let speechmatics = AIFeatures.speechmaticsKey
                 group.addTask {
-                    try await Task.sleep(for: .seconds(Double(index) * 1.1))
+                    if let speechmatics {
+                        return (index, try await Speechmatics.transcribe(audio: url, key: speechmatics))
+                    }
+                    try await Task.sleep(for: .seconds(Double(index) * AIProvider.current.spacing))
                     return (index, try await MistralClient.transcribe(audio: url, key: key))
                 }
             }
@@ -204,9 +235,70 @@ final class LyricsGenerator: ObservableObject {
         return transcribed
     }
 
+    /// The audio to transcribe. With Groq and the Sing Along model, only the
+    /// vocals are sent: Whisper places words far better without the band
+    /// (a held note over the music is what it hands to the next word).
+    /// Speechmatics gets the song itself: separating the vocals on the phone
+    /// first made the wait far too long.
+    static func audioChunks(for song: Song) async throws -> [AudioChunk] {
+        let url = song.playableFileURL
+        if AIProvider.current == .groq, !Speechmatics.isOn, SingAlongModel.isSupported,
+           FileManager.default.fileExists(atPath: SingAlongModel.modelURL.path) {
+            let id = song.id
+            let vocals = await Task.detached(priority: .userInitiated) {
+                await Self.vocalsFile(from: url, id: id)
+            }.value
+            if let vocals {
+                var chunks = try await audioChunks(at: vocals, duration: song.duration)
+                if chunks.contains(where: { $0.url == vocals }) {
+                    for index in chunks.indices where chunks[index].url == vocals { chunks[index].isTemporary = true }
+                } else {
+                    try? FileManager.default.removeItem(at: vocals)
+                }
+                return chunks
+            }
+        }
+        return try await audioChunks(at: url, duration: song.duration)
+    }
+
+    /// The song's vocals alone (separated now, or kept from Sing Along), as
+    /// a mono AAC file; nil if they can't be had.
+    nonisolated private static func vocalsFile(from url: URL, id: UUID) async -> URL? {
+        guard let track = await StageTrack.load(url),
+              await VocalSeparator.separateAll(track, id: id, progress: { _ in }),
+              let format = AVAudioFormat(standardFormatWithSampleRate: StageTrack.sampleRate, channels: 1),
+              let buffer = AVAudioPCMBuffer(pcmFormat: format, frameCapacity: AVAudioFrameCount(track.count)),
+              let mono = buffer.floatChannelData?[0] else { return nil }
+        buffer.frameLength = AVAudioFrameCount(track.count)
+        for i in 0..<track.count { mono[i] = (track.vocalsLeft[i] + track.vocalsRight[i]) / 2 }
+        let output = FileManager.default.temporaryDirectory.appendingPathComponent("\(UUID().uuidString).m4a")
+        let settings: [String: Any] = [
+            AVFormatIDKey: kAudioFormatMPEG4AAC,
+            AVSampleRateKey: StageTrack.sampleRate,
+            AVNumberOfChannelsKey: 1,
+            AVEncoderBitRateKey: 96_000
+        ]
+        do {
+            // Written and closed before it's read.
+            try autoreleasepool {
+                let file = try AVAudioFile(forWriting: output, settings: settings, commonFormat: .pcmFormatFloat32, interleaved: false)
+                try file.write(from: buffer)
+            }
+            return output
+        } catch {
+            try? FileManager.default.removeItem(at: output)
+            return nil
+        }
+    }
+
     /// Voxtral sometimes stops transcribing well before the end of a whole
-    /// song, so songs are sent a minute at a time.
-    nonisolated private static let chunkLength: TimeInterval = 60
+    /// song, so songs are sent a minute at a time. Whisper (Groq) takes a
+    /// whole song: one request, and no words lost at the cuts. Ten minutes
+    /// of AAC stays under Groq's 25 MB.
+    nonisolated private static var chunkLength: TimeInterval {
+        if Speechmatics.isOn { return 3600 }
+        return AIProvider.current == .groq ? 600 : 60
+    }
     nonisolated private static let chunkOverlap: TimeInterval = 4
 
     /// A short compressed file goes as it is; anything else is cut into
@@ -457,9 +549,35 @@ final class LyricsGenerator: ObservableObject {
         return splitLongLine(Array(group[..<cut]), hinted: hinted) + splitLongLine(Array(group[cut...]), hinted: hinted)
     }
 
+    /// The model the words are heard by, signed in the file and shown
+    /// under the lyrics.
+    nonisolated static var transcriptionModelName: String {
+        if Speechmatics.isOn {
+            return "Speechmatics " + (Speechmatics.operatingPoint == .standard ? "Standard" : "Enhanced")
+        }
+        return AIProvider.current == .groq ? "Whisper" : "Voxtral"
+    }
+
+    /// Where a file's words come from: heard in the song, or lyrics that
+    /// already existed (from `source` when known) only given their times.
+    enum TextOrigin: Sendable {
+        case transcribed
+        case existing(source: String?)
+    }
+
+    /// The signature's parentheses: the model, then for a sync of
+    /// existing lyrics, where those came from.
+    nonisolated static func signature(_ origin: TextOrigin) -> String {
+        switch origin {
+        case .transcribed: transcriptionModelName
+        case .existing(let source?): transcriptionModelName + "; lyrics from " + source
+        case .existing(nil): transcriptionModelName + "; synced only"
+        }
+    }
+
     /// LRC text, each line shown a beat before it's sung; long breaks end
     /// the previous line so it isn't left lit through a solo.
-    nonisolated static func lrc(lines: [Line], for song: Song) -> String {
+    nonisolated static func lrc(lines: [Line], for song: Song, origin: TextOrigin = .transcribed) -> String {
         func stamp(_ time: TimeInterval) -> String {
             let hundredths = Int((max(0, time) * 100).rounded())
             return String(format: "[%02d:%02d.%02d]", hundredths / 6000, hundredths / 100 % 60, hundredths % 100)
@@ -468,7 +586,7 @@ final class LyricsGenerator: ObservableObject {
             "[ti:\(song.title)]",
             "[ar:\(song.artist)]",
             "[al:\(song.album)]",
-            "[by:LRCplayer AI Beta (Mistral Voxtral)]"
+            "[by:LRCplayer AI Beta (\(signature(origin)))]"
         ]
         for (index, line) in lines.enumerated() {
             output.append(stamp(line.start - 0.15) + line.text)

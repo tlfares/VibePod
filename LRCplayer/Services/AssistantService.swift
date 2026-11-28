@@ -200,6 +200,13 @@ final class AssistantService: ObservableObject {
         try? data.write(to: Self.fileURL, options: .atomic)
     }
 
+    /// iCloud Sync: the conversation as another device left it.
+    func replaceMessages(_ synced: [AssistantMessage]) {
+        guard !isWorking, synced != messages else { return }
+        messages = synced
+        save()
+    }
+
     /// The last exchanges, shortened: enough to follow up on, cheap to send.
     private func recentTurns(in messages: [AssistantMessage], limit: Int = 5) -> [AssistantTurn] {
         var turns: [AssistantTurn] = []
@@ -251,7 +258,7 @@ final class AssistantService: ObservableObject {
                 let library = AssistantLibrary(libraryService: libraryService, player: player)
                 let prompt = AssistantPrompt(
                     context: library.context(budget: engine.budget) + extraContext(),
-                    history: engine.kind == .onDevice ? Array(history.suffix(3)) : history,
+                    history: engine.kind == .onDevice ? Array(history.suffix(3)) : Array(history.suffix(AIProvider.current.assistantHistory)),
                     message: text,
                     lookupResults: lookupResults,
                     isVoice: viaVoice,
@@ -406,8 +413,8 @@ final class AssistantService: ObservableObject {
 
     private static var setupHint: String {
         prefersFrench
-            ? "Pour me parler, active Apple Intelligence dans Réglages, ou ajoute une clé Mistral dans Réglages › Outils › Fonctions IA."
-            : "To talk to me, turn on Apple Intelligence in Settings, or add a Mistral key in Settings › Tools › AI Features."
+            ? "Pour me parler, active Apple Intelligence dans Réglages, ou ajoute une clé \(AIProvider.current.name) dans Réglages › Outils › Fonctions IA."
+            : "To talk to me, turn on Apple Intelligence in Settings, or add a \(AIProvider.current.name) key in Settings › Tools › AI Features."
     }
 
     private static func describe(_ error: Error?) -> String {
@@ -415,16 +422,16 @@ final class AssistantService: ObservableObject {
         if let error = error as? LanguageModelSession.GenerationError {
             switch error {
             case .guardrailViolation, .refusal:
-                return french ? "Apple Intelligence a refusé de répondre à ça. Ajoute une clé Mistral pour aller plus loin." : "Apple Intelligence wouldn't answer that one. A Mistral key lets me go further."
+                return french ? "Apple Intelligence a refusé de répondre à ça. Ajoute une clé \(AIProvider.current.name) pour aller plus loin." : "Apple Intelligence wouldn't answer that one. A \(AIProvider.current.name) key lets me go further."
             case .exceededContextWindowSize:
-                return french ? "Ta bibliothèque est trop grande pour le modèle sur l'appareil. Une clé Mistral m'aiderait." : "Your library is too big for the on-device model. A Mistral key would help."
+                return french ? "Ta bibliothèque est trop grande pour le modèle sur l'appareil. Une clé \(AIProvider.current.name) m'aiderait." : "Your library is too big for the on-device model. A \(AIProvider.current.name) key would help."
             case .rateLimited:
                 return french ? "Apple Intelligence est occupé, réessaie dans un instant." : "Apple Intelligence is busy, try again in a moment."
             default: break
             }
         }
         if let error = error as? MistralError, case .rateLimited = error {
-            return french ? "Mistral limite les requêtes pour l'instant. Réessaie dans une minute." : MistralError.rateLimited.localizedDescription
+            return french ? "\(AIProvider.current.name) limite les requêtes pour l'instant. Réessaie dans une minute." : MistralError.rateLimited.localizedDescription
         }
         return error?.localizedDescription ?? (french ? "Je n'ai pas pu répondre." : "I couldn't answer.")
     }
@@ -1057,6 +1064,13 @@ final class AssistantMemory: ObservableObject {
         if let data = try? JSONEncoder().encode(items) {
             try? data.write(to: Self.fileURL, options: .atomic)
         }
+    }
+
+    /// iCloud Sync: the memories as another device left them.
+    func replaceItems(_ synced: [Item]) {
+        guard synced != items else { return }
+        items = synced
+        save()
     }
 
     /// "Retiens que je préfère les lives" → remember "je préfère les lives";

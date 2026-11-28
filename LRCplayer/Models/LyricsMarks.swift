@@ -51,6 +51,22 @@ struct LyricsMarks: Codable, Equatable, Sendable {
         NotificationCenter.default.post(name: didChangeNotification, object: songID)
     }
 
+    /// The stored file as is, for iCloud Sync.
+    static func rawData(for songID: UUID) -> Data? {
+        try? Data(contentsOf: url(for: songID))
+    }
+
+    /// Another device's file, or none.
+    static func setRawData(_ data: Data?, for songID: UUID) {
+        if let data {
+            try? FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
+            try? data.write(to: url(for: songID), options: .atomic)
+        } else {
+            try? FileManager.default.removeItem(at: url(for: songID))
+        }
+        NotificationCenter.default.post(name: didChangeNotification, object: songID)
+    }
+
     // MARK: Applying
 
     /// The lyrics as shown and played: before the start and (when skipped)

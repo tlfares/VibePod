@@ -207,6 +207,7 @@ final class PlayerViewModel: ObservableObject {
         if let song = trackedSong, listenedSeconds >= 10, !PrivateListening.isOn {
             ListeningStatsService.shared.recordPlay(song: song, durationPlayed: listenedSeconds)
             libraryService.recordPlay(songID: song.id)
+            SubsonicService.shared.songWasPlayed(song)
         }
         trackedSong = nil
         listenedSeconds = 0
@@ -256,6 +257,22 @@ final class PlayerViewModel: ObservableObject {
         recordReplay(to: time)
         playerService.seek(to: time)
         updateCurrentLyric()
+    }
+    /// Holding Previous/Next, or ←/→: a few seconds back or ahead.
+    func skip(by delta: TimeInterval) {
+        seek(to: max(0, min(playerService.preciseCurrentTime + delta, duration)))
+    }
+
+    /// The arrow keys: the synced lyrics' line before or after the one
+    /// sung. Only while they're shown.
+    func stepLyricLine(by step: Int) {
+        guard showLyrics, let lyrics = currentLyrics, lyrics.hasTimedLyrics else { return }
+        let lines = lyrics.lines.filter { !$0.isInstrumentalGap }
+        let clock = playerService.preciseCurrentTime + lyrics.offset
+        let current = lines.lastIndex { $0.time <= clock + 0.05 }
+        let target = current.map { $0 + step } ?? (step > 0 ? 0 : -1)
+        guard lines.indices.contains(target) else { return }
+        seek(to: max(0, lines[target].time - lyrics.offset))
     }
     func toggleRepeat() { playerService.toggleRepeat() }
     func toggleShuffle() { playerService.toggleShuffle() }
@@ -418,6 +435,7 @@ final class PlayerViewModel: ObservableObject {
             return
         }
         let stored = libraryService.storedLyricsPath(for: destination.path)
+        LyricsGenerator.setSource("LRCLIB", forStoredPath: stored)
         LyricsKindCache.invalidate(storedPath: stored)
         libraryService.setLyricsPath(stored, for: song.id)
         // The results sheet can outlive the song: never show its lyrics over
@@ -468,6 +486,7 @@ final class PlayerViewModel: ObservableObject {
             try? LyricsSingerStore.save(trailing: trailing, for: song.id, lyrics: lyrics)
         }
         let stored = libraryService.storedLyricsPath(for: destination.path)
+        LyricsGenerator.setSource(candidate.source, forStoredPath: stored)
         LyricsKindCache.invalidate(storedPath: stored)
         libraryService.setLyricsPath(stored, for: song.id)
         guard song.id == currentSong?.id else { return }
@@ -556,6 +575,8 @@ extension PlayerViewModel {
         let from = max(0, span.start - offset - 1), to = span.end - offset + 1
         let audio = song.playableFileURL
         Task {
+            // A streamed song is fetched first; the rough timing stays meanwhile.
+            guard await SubsonicDownloads.shared.ensureLocal(song) else { return }
             let output = FileManager.default.temporaryDirectory.appendingPathComponent("\(UUID().uuidString).m4a")
             defer { try? FileManager.default.removeItem(at: output) }
             do {

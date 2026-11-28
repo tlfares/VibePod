@@ -13,6 +13,7 @@ struct LyricsView: View {
     /// LRCLIB answered but had nothing: the moment to offer generating them.
     @State private var lrclibFoundNothing = false
     @State private var aiAvailable = AIFeatures.isAvailable
+    @AppStorage(Speechmatics.operatingPointKey) private var speechmaticsModel = Speechmatics.OperatingPoint.standard
     @ObservedObject private var translator = LyricsTranslator.shared
     @State private var sharing: LyricsShareRequest?
     @State private var marking: LyricsMarkRequest?
@@ -48,10 +49,13 @@ struct LyricsView: View {
                 )
             } else if let lyrics = state.lyrics, lyrics.hasPlainText {
                 PlainLyricsUIKitView(text: lyrics.plainText)
+            } else if showLRCLIBLoading || generationStage != nil {
+                // The progress card stands alone. Faded out instead, the
+                // glass buttons were drawn over the card while they went.
+                Color.clear
             } else {
                 noLyricsView
-                    // The progress card stands alone, not over half-hidden text.
-                    .opacity(showLRCLIBLoading || generationStage != nil ? 0 : 1)
+                    .transition(.identity)
             }
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
@@ -134,10 +138,20 @@ struct LyricsView: View {
     // MARK: AI lyrics
 
     private func credit(for lyrics: LRCLyrics) -> String? {
-        if lyrics.isGenerated { return String(localized: "Transcribed and synced by AI (Mistral) \u{2022} BETA") }
+        if var credit = lyrics.aiCredit {
+            // Syncs made before they were signed as such: the lyrics they
+            // replaced are still remembered.
+            if !credit.syncOnly, let song = playerVM.currentSong, let original = LyricsGenerator.original(for: song.id) {
+                credit.syncOnly = true
+                credit.source = LyricsGenerator.source(forStoredPath: original)
+            }
+            if !credit.syncOnly { return String(localized: "Transcribed and synced by \(credit.model) \u{2022} BETA") }
+            if let source = credit.source { return String(localized: "Lyrics from \(source), synced by \(credit.model) \u{2022} BETA") }
+            return String(localized: "Synced by \(credit.model) \u{2022} BETA")
+        }
         if !state.wordTimings.isEmpty {
             if let source = playerVM.currentWordSyncSource { return String(localized: "Lyrics from \(source)") }
-            return String(localized: "Words synced by AI (Mistral) \u{2022} BETA")
+            return String(localized: "Words synced by AI \u{2022} BETA")
         }
         return nil
     }
@@ -195,9 +209,38 @@ struct LyricsView: View {
             return lrclibErrorMessage.isEmpty ? String(localized: "No lyrics found for this song.") : lrclibErrorMessage
         }
         if aiAvailable {
-            return String(localized: "No lyrics found for this song. Mistral AI can transcribe its vocals and sync them for you. The song's audio is sent to Mistral; you can delete the result anytime.")
+            return String(localized: "No lyrics found for this song. \(AIProvider.current.name) can transcribe its vocals and sync them for you. The song's audio is sent to \(AIProvider.current.name); you can delete the result anytime.")
         }
         return String(localized: "No lyrics found for this song. AI Features in Settings › Tools can generate them.")
+    }
+
+    private var generateLabel: some View {
+        Label("Generate", systemImage: "sparkles")
+            .font(.headline)
+            .padding(.horizontal, 6)
+    }
+
+    /// Picking a model keeps it and generates with it, once the menu has
+    /// closed: the loading card replaced the button while the menu was
+    /// still shrinking back into it, over the card.
+    private var speechmaticsModelPicker: some View {
+        Section("Speechmatics Model") {
+            ForEach(Speechmatics.OperatingPoint.allCases) { point in
+                Button {
+                    speechmaticsModel = point
+                    Task {
+                        try? await Task.sleep(for: .milliseconds(400))
+                        generateLyrics()
+                    }
+                } label: {
+                    if point == speechmaticsModel {
+                        Label(point.title, systemImage: "checkmark")
+                    } else {
+                        Text(point.title)
+                    }
+                }
+            }
+        }
     }
 
     private func generateLyrics() {
@@ -250,12 +293,22 @@ struct LyricsView: View {
                         .padding(.horizontal, 6)
                 }
                 if aiAvailable {
-                    Button {
-                        generateLyrics()
-                    } label: {
-                        Label("Generate", systemImage: "sparkles")
-                            .font(.headline)
-                            .padding(.horizontal, 6)
+                    if Speechmatics.isOn {
+                        // Held: Speechmatics' model, kept for the next ones.
+                        Menu {
+                            speechmaticsModelPicker
+                        } label: {
+                            generateLabel
+                        } primaryAction: {
+                            generateLyrics()
+                        }
+                        .menuStyle(.button)
+                    } else {
+                        Button {
+                            generateLyrics()
+                        } label: {
+                            generateLabel
+                        }
                     }
                 }
             }
@@ -264,7 +317,7 @@ struct LyricsView: View {
             .padding(.top, 6)
 
             Text(aiAvailable
-                 ? "Search: LRCLIB, KuGou, Musixmatch\u{2026} \u{2022} Generate: Mistral AI (Beta), sends the audio"
+                 ? "Search: LRCLIB, KuGou, Musixmatch\u{2026} \u{2022} Generate: \(AIProvider.current.name) (Beta), sends the audio"
                  : "LRCLIB, KuGou, Musixmatch, LyricsPlus, Unison")
                 .font(.system(size: 11, weight: .regular))
                 .foregroundStyle(.tertiary)
@@ -572,6 +625,12 @@ private final class TimedLyricsTableView: UIView, UITableViewDataSource, UITable
         tableView.separatorStyle = .none
         tableView.showsVerticalScrollIndicator = false
         tableView.contentInsetAdjustmentBehavior = .never
+        // The lyrics fade out on their own: no bar's edge over them (in the
+        // Mac's full screen it showed as a gray band).
+        if MacApp.isActive {
+            tableView.topEdgeEffect.isHidden = true
+            tableView.bottomEdgeEffect.isHidden = true
+        }
         tableView.estimatedRowHeight = 0
         tableView.keyboardDismissMode = .none
         tableView.dataSource = self

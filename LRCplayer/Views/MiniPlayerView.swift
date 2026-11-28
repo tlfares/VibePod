@@ -156,11 +156,14 @@ struct MiniPlayerView: View {
     }
 }
 
-private struct MiniPlayerTitlePager: UIViewRepresentable {
+/// The song's title and artist, swiped sideways to the previous or the
+/// next song, like Music's mini player.
+struct MiniPlayerTitlePager: UIViewRepresentable {
     let currentSong: Song?
     let previousSong: Song?
     let nextSong: Song?
     let showsArtist: Bool
+    var style = MiniPlayerTitleStyle()
     let onTap: () -> Void
     let onPrevious: () -> Void
     let onNext: () -> Void
@@ -175,6 +178,7 @@ private struct MiniPlayerTitlePager: UIViewRepresentable {
             previousSong: previousSong,
             nextSong: nextSong,
             showsArtist: showsArtist,
+            style: style,
             onTap: onTap,
             onPrevious: onPrevious,
             onNext: onNext
@@ -182,7 +186,21 @@ private struct MiniPlayerTitlePager: UIViewRepresentable {
     }
 }
 
-private final class MiniPlayerTitleScrollView: UIView, UIScrollViewDelegate {
+/// The pager's text: the mini player's, or the wide bar's (centered, sized
+/// for the pointer or for touch).
+struct MiniPlayerTitleStyle: Equatable {
+    var titleSize: CGFloat = 15
+    var subtitleSize: CGFloat = 13
+    var alignment: NSTextAlignment = .natural
+
+    /// The two lines' height.
+    var height: CGFloat {
+        ceil(UIFont.systemFont(ofSize: titleSize, weight: .semibold).lineHeight)
+            + ceil(UIFont.systemFont(ofSize: subtitleSize).lineHeight)
+    }
+}
+
+final class MiniPlayerTitleScrollView: UIView, UIScrollViewDelegate {
     private enum PageKind {
         case previous
         case current
@@ -204,6 +222,7 @@ private final class MiniPlayerTitleScrollView: UIView, UIScrollViewDelegate {
     private var lastLayoutWidth: CGFloat = 0
     private var isRecentering = false
     private var showsArtist = true
+    private var style = MiniPlayerTitleStyle()
 
     override init(frame: CGRect) {
         super.init(frame: frame)
@@ -264,14 +283,24 @@ private final class MiniPlayerTitleScrollView: UIView, UIScrollViewDelegate {
             lastLayoutWidth = width
             scrollView.layoutIfNeeded()
             recenter(animated: false)
+        } else if !scrollView.isDragging, !scrollView.isDecelerating, !isRecentering,
+                  abs(scrollView.contentOffset.x - CGFloat(currentPageIndex) * width) > 0.5 {
+            // Never left between pages, or on a neighbour's: the songs
+            // changed while it couldn't move (hidden, zero width, mid-swipe).
+            recenter(animated: false)
         }
     }
+
+    /// The songs changed during a swipe: once it ends, back to the current
+    /// page, without skipping (the pages under the finger moved).
+    private var changedWhileScrolling = false
 
     func configure(
         currentSong: Song?,
         previousSong: Song?,
         nextSong: Song?,
         showsArtist: Bool,
+        style: MiniPlayerTitleStyle,
         onTap: @escaping () -> Void,
         onPrevious: @escaping () -> Void,
         onNext: @escaping () -> Void
@@ -279,6 +308,10 @@ private final class MiniPlayerTitleScrollView: UIView, UIScrollViewDelegate {
         if self.showsArtist != showsArtist {
             self.showsArtist = showsArtist
             pages.forEach { $0.showsArtist = showsArtist }
+        }
+        if self.style != style {
+            self.style = style
+            pages.forEach { $0.style = style }
         }
         self.onTap = onTap
         self.onPrevious = onPrevious
@@ -298,6 +331,8 @@ private final class MiniPlayerTitleScrollView: UIView, UIScrollViewDelegate {
             nextSongID != nextSong?.id ||
             pageKinds != pageModels.map(\.kind)
 
+        // Checked again at the next layout, whatever happened meanwhile.
+        defer { setNeedsLayout() }
         guard didChange else { return }
 
         currentSongID = currentSong?.id
@@ -310,6 +345,10 @@ private final class MiniPlayerTitleScrollView: UIView, UIScrollViewDelegate {
         // Lay the new pages out first so the offset lands on the current one.
         stackView.layoutIfNeeded()
         scrollView.layoutIfNeeded()
+        if scrollView.isDragging || scrollView.isDecelerating {
+            changedWhileScrolling = true
+            return
+        }
         recenter(animated: false)
     }
 
@@ -333,6 +372,7 @@ private final class MiniPlayerTitleScrollView: UIView, UIScrollViewDelegate {
         while pages.count < count {
             let page = MiniPlayerTrackTextStack()
             page.showsArtist = showsArtist
+            page.style = style
             page.translatesAutoresizingMaskIntoConstraints = false
             pages.append(page)
             stackView.addArrangedSubview(page)
@@ -376,6 +416,11 @@ private final class MiniPlayerTitleScrollView: UIView, UIScrollViewDelegate {
     }
 
     private func finishScroll() {
+        if changedWhileScrolling {
+            changedWhileScrolling = false
+            recenter(animated: true)
+            return
+        }
         guard !isRecentering, scrollView.bounds.width > 0 else { return }
 
         let rawPage = Int(round(scrollView.contentOffset.x / scrollView.bounds.width))
@@ -406,6 +451,12 @@ private final class DirectionLockedPagingScrollView: UIScrollView {
         }
         return super.gestureRecognizerShouldBegin(gestureRecognizer)
     }
+
+    /// The wide bar's trackpad swipe up (scroll only) watches the same
+    /// fingers: sideways it pages, upwards that one opens the player.
+    func gestureRecognizer(_ gestureRecognizer: UIGestureRecognizer, shouldRecognizeSimultaneouslyWith other: UIGestureRecognizer) -> Bool {
+        gestureRecognizer === panGestureRecognizer && other is UIPanGestureRecognizer && other.allowedTouchTypes.isEmpty
+    }
 }
 
 private final class MiniPlayerTrackTextStack: UIView {
@@ -415,6 +466,16 @@ private final class MiniPlayerTrackTextStack: UIView {
     var showsArtist = true {
         didSet {
             artistLabel.isHidden = !showsArtist
+            setNeedsLayout()
+        }
+    }
+
+    var style = MiniPlayerTitleStyle() {
+        didSet {
+            titleLabel.font = .systemFont(ofSize: style.titleSize, weight: .semibold)
+            artistLabel.font = .systemFont(ofSize: style.subtitleSize, weight: .regular)
+            titleLabel.textAlignment = style.alignment
+            artistLabel.textAlignment = style.alignment
             setNeedsLayout()
         }
     }

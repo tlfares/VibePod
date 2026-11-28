@@ -221,14 +221,25 @@ final class AssistantVoice: NSObject, ObservableObject {
             func field(_ name: String, _ value: String) {
                 body.append(Data("--\(boundary)\r\nContent-Disposition: form-data; name=\"\(name)\"\r\n\r\n\(value)\r\n".utf8))
             }
-            field("model", "voxtral-mini-latest")
+            let provider = AIProvider.current
+            field("model", provider.voiceModel)
             if withNames {
-                for name in vocabulary() { field("context_bias", name) }
+                switch provider {
+                case .mistral:
+                    for name in vocabulary() { field("context_bias", name) }
+                case .groq:
+                    // Whisper reads a short prompt (224 tokens at most) for spellings.
+                    var prompt = ""
+                    for name in vocabulary() where prompt.count + name.count < 600 {
+                        prompt += prompt.isEmpty ? name : ", " + name
+                    }
+                    if !prompt.isEmpty { field("prompt", prompt) }
+                }
             }
             body.append(Data("--\(boundary)\r\nContent-Disposition: form-data; name=\"file\"; filename=\"voice.m4a\"\r\nContent-Type: audio/mp4\r\n\r\n".utf8))
             body.append(audio)
             body.append(Data("\r\n--\(boundary)--\r\n".utf8))
-            var request = URLRequest(url: URL(string: "https://api.mistral.ai/v1/audio/transcriptions")!)
+            var request = URLRequest(url: MistralClient.transcriptionURL)
             request.httpMethod = "POST"
             request.timeoutInterval = 20
             request.setValue("Bearer \(key)", forHTTPHeaderField: "Authorization")

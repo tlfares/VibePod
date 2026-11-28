@@ -154,6 +154,14 @@ final class SettingsPanelController: UINavigationController {
             )
             page.view.backgroundColor = .settingsBackground
             controller = page
+        case .cloudSync:
+            let page = PageHostingController(
+                content: AnyView(CloudSyncView()),
+                services: services,
+                title: PageTitle(text: "Device Sync", large: false)
+            )
+            page.view.backgroundColor = .settingsBackground
+            controller = page
         case .equalizer:
             let page = PageHostingController(
                 content: AnyView(EqualizerView()),
@@ -167,6 +175,30 @@ final class SettingsPanelController: UINavigationController {
                 content: AnyView(SongMergeView()),
                 services: services,
                 title: PageTitle(text: "Merge Songs", large: false)
+            )
+            page.view.backgroundColor = .settingsBackground
+            controller = page
+        case .history:
+            let page = PageHostingController(
+                content: AnyView(HistoryImportView()),
+                services: services,
+                title: PageTitle(text: "Import Listening History", large: false)
+            )
+            page.view.backgroundColor = .settingsBackground
+            controller = page
+        case .server:
+            let page = PageHostingController(
+                content: AnyView(MusicServerView()),
+                services: services,
+                title: PageTitle(text: "Music Server", large: false)
+            )
+            page.view.backgroundColor = .settingsBackground
+            controller = page
+        case .customize:
+            let page = PageHostingController(
+                content: AnyView(CustomizeShortcutsView()),
+                services: services,
+                title: PageTitle(text: "Customize", large: false)
             )
             page.view.backgroundColor = .settingsBackground
             controller = page
@@ -206,7 +238,7 @@ extension UIColor {
 }
 
 enum SettingsDestination {
-    case stats, games, exclusive, spotify, ai, transfer, metadata, equalizer, merge
+    case stats, games, exclusive, spotify, ai, transfer, metadata, equalizer, merge, server, history, cloudSync, customize
 
     /// The tile the page opens from, when it has one.
     var tileColor: Color? {
@@ -225,6 +257,7 @@ struct SettingsView: View {
     let open: (SettingsDestination) -> Void
 
     @EnvironmentObject private var router: AppRouter
+    @AppStorage(IPadNavigation.storageKey) private var iPadNavigation = IPadNavigation.tabBar.rawValue
     @AppStorage(AppTint.storageKey) private var tintRawValue = AppTint.infused.rawValue
     @AppStorage(AppAppearance.storageKey) private var appearanceRawValue = AppAppearance.dark.rawValue
     @AppStorage("playlistsAlwaysOnTop") private var playlistsOnTop = false
@@ -244,6 +277,7 @@ struct SettingsView: View {
     @AppStorage(PrivateListening.key) private var privateListening = false
     @AppStorage(VolumeLeveling.enabledKey) private var volumeLeveling = false
     @AppStorage(VolumeLeveling.maxBoostKey) private var maxBoost = 6.0
+    @AppStorage(SongSwipeAction.storageKey) private var songSwipeLeft = SongSwipeAction.goToAlbum.rawValue
     @State private var appearanceOpen = false
     @State private var equalizerSummary = EQPreset.summary
     @State private var nowPlayingOpen = false
@@ -254,13 +288,17 @@ struct SettingsView: View {
     @State private var hiddenUnlocked = HiddenSettings.isUnlocked
     @State private var hideArtwork = HiddenSettings.hideNowPlayingArtwork
     @State private var alphaFeatures = UserDefaults.standard.bool(forKey: HiddenSettings.alphaFeaturesKey)
+    @AppStorage(YearInMusic.earlyKey) private var yearInMusicEarly = false
 
     var body: some View {
         ScrollView {
             VStack(spacing: 16) {
-                HStack(spacing: 16) {
-                    FeatureTile(title: "Stats", systemImage: "chart.bar.xaxis", color: .statsTint) { open(.stats) }
-                    FeatureTile(title: "Games", systemImage: "arcade.stick", color: .gamesTint) { open(.games) }
+                // With the sidebar (the Mac, an iPad), Stats and Games are in it.
+                if !router.usesSidebar {
+                    HStack(spacing: 16) {
+                        FeatureTile(title: "Stats", systemImage: "chart.bar.xaxis", color: .statsTint) { open(.stats) }
+                        FeatureTile(title: "Games", systemImage: "arcade.stick", color: .gamesTint) { open(.games) }
+                    }
                 }
                 HStack(spacing: 16) {
                     FeatureTile(title: "Exclusive Features", systemImage: "star.fill", color: .extrasTint) { open(.exclusive) }
@@ -316,6 +354,7 @@ struct SettingsView: View {
                                 }
                                 Text("How much a quiet song can be raised. Higher keeps quiet songs closer to loud ones, but lowers the overall volume.")
                                     .font(.footnote).foregroundStyle(.secondary)
+                                StreamingNote(text: "Server songs are leveled once downloaded.")
                             }
                             .transition(.opacity)
                         }
@@ -376,33 +415,62 @@ struct SettingsView: View {
                             .font(.footnote)
                             .foregroundStyle(.secondary)
                         Divider().padding(.vertical, 4)
-                        Text("Toolbar Shortcuts").font(.subheadline).foregroundStyle(.secondary)
-                        ShortcutEditor(leading: $leadingShortcut, leading2: $leadingShortcut2, leading3: $leadingShortcut3, trailing: $trailingShortcut)
-                        Text("Touch and hold a shortcut, then drag it into a slot, between them or out of the bar. AutoMix and Music Haptics switch on and off right from the toolbar.")
+                        Button {
+                            guard SettingsSwipe.allowsTaps else { return }
+                            open(.customize)
+                        } label: {
+                            Label("Customize Shortcuts", systemImage: "square.grid.2x2")
+                                .frame(maxWidth: .infinity)
+                                .padding(.vertical, 4)
+                        }
+                        .buttonStyle(.glass)
+                        Text(MacApp.isActive ? "The buttons of the toolbar." : "The buttons of the toolbar and the tabs of the tab bar.")
                             .font(.footnote)
                             .foregroundStyle(.secondary)
                         Divider().padding(.vertical, 4)
-                        Text("Tab Bar").font(.subheadline).foregroundStyle(.secondary)
-                        TabBarEditor()
-                        Text("Touch and hold a tab, then drag it into the bar, around or out of it. Library and Search keep their ends.")
+                        if UIDevice.current.userInterfaceIdiom == .pad {
+                            Text("Navigation").font(.subheadline).foregroundStyle(.secondary)
+                            Picker("Navigation", selection: $iPadNavigation) {
+                                ForEach(IPadNavigation.allCases) { style in
+                                    Text(style.title).tag(style.rawValue)
+                                }
+                            }
+                            .pickerStyle(.segmented)
+                            Text("The sidebar lists every section of your library. In a narrow window, the tab bar comes back.")
+                                .font(.footnote)
+                                .foregroundStyle(.secondary)
+                            Divider().padding(.vertical, 4)
+                        }
+                        Text("Swipe a Song Left").font(.subheadline).foregroundStyle(.secondary)
+                        SongSwipePicker(selection: $songSwipeLeft)
+                        Text("Swiping a song right adds it to the queue. Go to Album and Go to Artist do nothing on the page they lead to.")
                             .font(.footnote)
                             .foregroundStyle(.secondary)
                     }
                 }
-                CollapsibleGlassCard(title: "Widget", systemImage: "widget.small", expanded: $widgetOpen) {
-                    VStack(alignment: .leading, spacing: 12) {
-                        Text("What a tap on the Now Playing widget opens").font(.subheadline).foregroundStyle(.secondary)
-                        ForEach(WidgetTapZone.allCases) { zone in
-                            WidgetTapActionRow(zone: zone)
+                // No widget on the Mac.
+                if !MacApp.isActive {
+                    CollapsibleGlassCard(title: "Widget", systemImage: "widget.small", expanded: $widgetOpen) {
+                        VStack(alignment: .leading, spacing: 12) {
+                            Text("What a tap on the Now Playing widget opens").font(.subheadline).foregroundStyle(.secondary)
+                            ForEach(WidgetTapZone.allCases) { zone in
+                                WidgetTapActionRow(zone: zone)
+                            }
+                            Text("Lyrics opens the player when the song has none. Playlist or Album opens the playlist playing, or else the song's album.")
+                                .font(.footnote)
+                                .foregroundStyle(.secondary)
                         }
-                        Text("Lyrics opens the player when the song has none. Playlist or Album opens the playlist playing, or else the song's album.")
-                            .font(.footnote)
-                            .foregroundStyle(.secondary)
                     }
                 }
                 CollapsibleGlassCard(title: "Tools", systemImage: "wrench.and.screwdriver.fill", expanded: $toolsOpen) {
                     VStack(alignment: .leading, spacing: 14) {
+                        toolRow("Device Sync", systemImage: "arrow.trianglehead.2.clockwise.rotate.90.icloud", destination: .cloudSync)
+                        Divider()
+                        toolRow("Music Server", systemImage: "server.rack", destination: .server)
+                        Divider()
                         toolRow("Import from Spotify", systemImage: "square.and.arrow.down", destination: .spotify)
+                        Divider()
+                        toolRow("Import Listening History", systemImage: "clock.arrow.circlepath", destination: .history)
                         Divider()
                         toolRow("Library Transfer", systemImage: "arrow.up.arrow.down", destination: .transfer)
                         Divider()
@@ -436,6 +504,15 @@ struct SettingsView: View {
                             }
                             .onChange(of: alphaFeatures) { _, value in HiddenSettings.alphaFeatures = value }
                             Divider()
+                            Toggle(isOn: $yearInMusicEarly) {
+                                VStack(alignment: .leading, spacing: 2) {
+                                    Text("Year in Music Now")
+                                    Text("On the home screen before December 1st.")
+                                        .font(.footnote)
+                                        .foregroundStyle(.secondary)
+                                }
+                            }
+                            Divider()
                             Button("Disable Hidden Settings", role: .destructive) {
                                 guard SettingsSwipe.allowsTaps else { return }
                                 HiddenSettings.isUnlocked = false
@@ -459,14 +536,17 @@ struct SettingsView: View {
         .scrollIndicators(.hidden)
         .background(Color(uiColor: .settingsBackground).ignoresSafeArea())
         .pageLeadingItem {
-            // For whoever doesn't think of swiping back.
-            Button {
-                router.showSettings = false
-            } label: {
-                BarIcon("Close Settings", systemImage: "chevron.backward")
+            // For whoever doesn't think of swiping back. Beside the sidebar
+            // (the Mac, an iPad), Settings are its page: nothing to close.
+            if !router.usesSidebar {
+                Button {
+                    router.showSettings = false
+                } label: {
+                    BarIcon("Close Settings", systemImage: "chevron.backward")
+                }
+                .buttonStyle(.plain)
+                .foregroundStyle(.tint)
             }
-            .buttonStyle(.plain)
-            .foregroundStyle(.tint)
         }
         .onReceive(NotificationCenter.default.publisher(for: HiddenSettings.didChangeNotification)) { _ in
             withAnimation(.smooth) { hiddenUnlocked = HiddenSettings.isUnlocked }
@@ -592,6 +672,7 @@ struct ExclusiveFeaturesView: View {
                     VStack(alignment: .leading, spacing: 12) {
                         Toggle("Song Transitions", isOn: $autoMix.animation(.smooth))
                         if autoMix {
+                            StreamingNote(text: "Server songs blend once downloaded. Streamed, they just follow each other.")
                             Text("Transition Style").font(.subheadline).foregroundStyle(.secondary)
                             GlassSegmentedPicker(
                                 "Transition Style",
@@ -737,7 +818,9 @@ struct ExclusiveFeaturesView: View {
                 if SingAlongModel.isSupported {
                     SingAlongCard()
                 }
-                DiscordPresenceCard()
+                if DiscordPresence.isSupported {
+                    DiscordPresenceCard()
+                }
                 HeadGesturesCard()
                 if WorkoutListening.isAvailable {
                     WorkoutsCard()
@@ -756,6 +839,9 @@ struct ExclusiveFeaturesView: View {
 /// hold) follows the finger: over the bar the others make room for it,
 /// anywhere else it leaves the bar. Library and Search keep their ends.
 private struct TabBarEditor: View {
+    /// Pinned to the bottom of its space, the options above, as on the
+    /// Customize page.
+    var fills = false
     @EnvironmentObject private var router: AppRouter
     @State private var dragged: AppTab?
     @State private var location: CGPoint = .zero
@@ -782,36 +868,12 @@ private struct TabBarEditor: View {
     var body: some View {
         let unused = AppTab.optional.filter { !router.optionalTabs.contains($0) }
         VStack(spacing: 16) {
-            HStack(spacing: 0) {
-                item(.library).frame(maxWidth: .infinity).opacity(0.45)
-                ForEach(router.optionalTabs) { tab in
-                    if let index = barTabs.firstIndex(of: tab), index == gapIndex { gap }
-                    handle(tab)
-                        .frame(maxWidth: tab == dragged ? 0 : .infinity)
-                }
-                if gapIndex == barTabs.count { gap }
-                item(.search).frame(maxWidth: .infinity).opacity(0.45)
+            if fills {
+                shelf(unused)
+                Spacer(minLength: 0)
             }
-            .padding(.vertical, 8)
-            .padding(.horizontal, 6)
-            .frame(maxWidth: .infinity)
-            .glassEffect(.regular, in: .capsule)
-            .onGeometryChange(for: CGRect.self) { $0.frame(in: .named(Self.space)) } action: { barFrame = $0 }
-
-            Group {
-                if unused.isEmpty {
-                    Text("Drag a tab out of the bar to remove it")
-                        .font(.footnote)
-                        .foregroundStyle(.tertiary)
-                } else {
-                    LazyVGrid(columns: [GridItem(.adaptive(minimum: 64), spacing: 12)], spacing: 14) {
-                        ForEach(unused) { tab in
-                            handle(tab, circled: true)
-                        }
-                    }
-                }
-            }
-            .frame(maxWidth: .infinity, minHeight: 76)
+            bar
+            if !fills { shelf(unused) }
         }
         .coordinateSpace(.named(Self.space))
         .overlay(alignment: .topLeading) {
@@ -833,6 +895,41 @@ private struct TabBarEditor: View {
         .onChange(of: isHolding) { _, holding in
             if !holding { drop() }
         }
+    }
+
+    private var bar: some View {
+            HStack(spacing: 0) {
+                item(.library).frame(maxWidth: .infinity).opacity(0.45)
+                ForEach(router.optionalTabs) { tab in
+                    if let index = barTabs.firstIndex(of: tab), index == gapIndex { gap }
+                    handle(tab)
+                        .frame(maxWidth: tab == dragged ? 0 : .infinity)
+                }
+                if gapIndex == barTabs.count { gap }
+                item(.search).frame(maxWidth: .infinity).opacity(0.45)
+            }
+            .padding(.vertical, 8)
+            .padding(.horizontal, 6)
+            .frame(maxWidth: .infinity)
+            .glassEffect(.regular, in: .capsule)
+            .onGeometryChange(for: CGRect.self) { $0.frame(in: .named(Self.space)) } action: { barFrame = $0 }
+    }
+
+    private func shelf(_ unused: [AppTab]) -> some View {
+        Group {
+            if unused.isEmpty {
+                Text("Drag a tab out of the bar to remove it")
+                    .font(.footnote)
+                    .foregroundStyle(.tertiary)
+            } else {
+                LazyVGrid(columns: [GridItem(.adaptive(minimum: 64), spacing: 12)], spacing: 14) {
+                    ForEach(unused) { tab in
+                        handle(tab, circled: true)
+                    }
+                }
+            }
+        }
+        .frame(maxWidth: .infinity, minHeight: 76)
     }
 
     /// Where the dragged tab would go, a dashed circle like the ones below.
@@ -909,10 +1006,56 @@ private struct TabBarEditor: View {
     }
 }
 
+/// Settings › Home › Customize Shortcuts: the toolbar as it sits at the
+/// top, the tab bar at the bottom, and what can go in them in between
+/// (a hairline apart). No tab bar on the Mac.
+struct CustomizeShortcutsView: View {
+    @AppStorage(HomeShortcut.leadingKey) private var leading = HomeShortcut.leadingDefault
+    @AppStorage(HomeShortcut.trailingKey) private var trailing = HomeShortcut.trailingDefault
+    @AppStorage(HomeShortcut.leading2Key) private var leading2 = HomeShortcut.none
+    @AppStorage(HomeShortcut.leading3Key) private var leading3 = HomeShortcut.none
+
+    var body: some View {
+        GeometryReader { geometry in
+            ScrollView {
+                VStack(spacing: 20) {
+                    ShortcutEditor(fills: true, leading: $leading, leading2: $leading2, leading3: $leading3, trailing: $trailing)
+                        .frame(maxHeight: .infinity)
+                    Text(MacApp.isActive
+                         ? "Click and hold a shortcut, then drag it. Features with an on/off switch toggle right from the toolbar; click and hold one for its settings."
+                         : "Touch and hold a shortcut or a tab, then drag it. Features with an on/off switch toggle right from the toolbar; touch and hold one for its settings.")
+                        .font(.footnote)
+                        .foregroundStyle(.tertiary)
+                        .multilineTextAlignment(.center)
+                        .frame(maxWidth: .infinity)
+                    if !MacApp.isActive {
+                        Rectangle()
+                            .fill(.separator)
+                            .frame(height: 0.5)
+                        TabBarEditor(fills: true)
+                            .frame(maxHeight: .infinity)
+                            .layoutPriority(-1)
+                    }
+                }
+                .padding(.horizontal, 16)
+                .padding(.top, 8)
+                .padding(.bottom, 12)
+                .frame(minHeight: geometry.size.height)
+            }
+            .scrollIndicators(.hidden)
+            .scrollBounceBehavior(.basedOnSize)
+        }
+        .background(Color(uiColor: .settingsBackground).ignoresSafeArea())
+    }
+}
+
 /// The home toolbar's two shortcut slots, edited like the tab bar: hold a
 /// shortcut and drag it into a slot, across, or out. Each slot sits on the
 /// capsule's inner side, so the toolbar reads the same both ways.
 private struct ShortcutEditor: View {
+    /// Pinned to the top of its space, the options below, as on the
+    /// Customize page.
+    var fills = false
     @Binding var leading: HomeShortcut
     @Binding var leading2: HomeShortcut
     @Binding var leading3: HomeShortcut
@@ -936,10 +1079,16 @@ private struct ShortcutEditor: View {
         }
     }
 
-    /// The filled slots beside Settings, then one empty to drop into.
+    /// The filled slots beside Settings, then one empty to drop into. On
+    /// the Mac, a shortcut it can't show (Music Haptics) isn't in its bar,
+    /// so not here either.
     private var leadingSlots: [Int] {
-        let filled = (0..<3).filter { value(.leading($0)) != .none }
-        return filled.count < 3 ? filled + [filled.count] : filled
+        let filled = (0..<3).filter {
+            let shortcut = value(.leading($0))
+            return shortcut != .none && (!MacApp.isActive || shortcut.isAvailable)
+        }
+        let empty = (0..<3).first { value(.leading($0)) == .none }
+        return filled + (empty.map { [$0] } ?? [])
     }
     private static let space = "shortcutEditor"
 
@@ -950,49 +1099,11 @@ private struct ShortcutEditor: View {
     }
 
     var body: some View {
-        let shelf = HomeShortcut.allCases.filter { $0 != .none && $0 != leading && $0 != leading2 && $0 != leading3 && $0 != trailing }
+        let shelf = HomeShortcut.allCases.filter { $0.isAvailable && $0 != leading && $0 != leading2 && $0 != leading3 && $0 != trailing }
         VStack(spacing: 16) {
-            HStack {
-                capsule {
-                    Image(systemName: "gearshape").foregroundStyle(.secondary)
-                    ForEach(leadingSlots, id: \.self) { slot(.leading($0)) }
-                }
-                Spacer()
-                Text("Library").font(.headline)
-                Spacer()
-                capsule {
-                    slot(.trailing)
-                    Image(systemName: "plus").foregroundStyle(.secondary)
-                }
-            }
-            .padding(.vertical, 4)
-
-            Group {
-                if shelf.isEmpty {
-                    Text("Drag a shortcut out of the bar to remove it")
-                        .font(.footnote)
-                        .foregroundStyle(.tertiary)
-                } else {
-                    LazyVGrid(columns: [GridItem(.adaptive(minimum: 72), spacing: 12)], spacing: 14) {
-                        ForEach(shelf) { shortcut in
-                            VStack(spacing: 4) {
-                                icon(shortcut)
-                                    .frame(width: 50, height: 50)
-                                    .overlay { dashed(tinted: true) }
-                                Text(shortcut.title)
-                                    .font(.caption2.weight(.medium))
-                                    .lineLimit(1)
-                                    .fixedSize()
-                            }
-                            .foregroundStyle(.tint)
-                            .opacity(shortcut == dragged ? 0 : 1)
-                            .contentShape(.rect)
-                            .gesture(drag(shortcut, from: nil))
-                        }
-                    }
-                }
-            }
-            .frame(maxWidth: .infinity, minHeight: 76)
+            bar
+            if fills { Spacer(minLength: 0) }
+            shelfView(shelf)
         }
         .coordinateSpace(.named(Self.space))
         .overlay(alignment: .topLeading) {
@@ -1017,6 +1128,73 @@ private struct ShortcutEditor: View {
         .onChange(of: isHolding) { _, holding in
             if !holding { drop() }
         }
+    }
+
+    private var bar: some View {
+            Group {
+                if MacApp.isActive {
+                    // The Mac's toolbar: the title on the left, every button
+                    // in one capsule on the right, in the window's order.
+                    HStack {
+                        Text("Library").font(.headline)
+                        Spacer()
+                        capsule {
+                            ForEach(leadingSlots, id: \.self) { slot(.leading($0)) }
+                            slot(.trailing)
+                            Image(systemName: "plus").foregroundStyle(.secondary)
+                        }
+                    }
+                } else {
+                    HStack {
+                        capsule {
+                            Image(systemName: "gearshape").foregroundStyle(.secondary)
+                            ForEach(leadingSlots, id: \.self) { slot(.leading($0)) }
+                        }
+                        Spacer()
+                        Text("Library").font(.headline)
+                        Spacer()
+                        capsule {
+                            slot(.trailing)
+                            Image(systemName: "plus").foregroundStyle(.secondary)
+                        }
+                    }
+                }
+            }
+            .padding(.vertical, 4)
+    }
+
+    private func shelfView(_ shelf: [HomeShortcut]) -> some View {
+            Group {
+                if shelf.isEmpty {
+                    Text("Drag a shortcut out of the bar to remove it")
+                        .font(.footnote)
+                        .foregroundStyle(.tertiary)
+                } else {
+                    LazyVGrid(columns: [GridItem(.adaptive(minimum: 72), spacing: 8, alignment: .top)], spacing: 14) {
+                        ForEach(shelf) { shortcut in
+                            VStack(spacing: 4) {
+                                icon(shortcut)
+                                    .frame(width: 50, height: 50)
+                                    .overlay { dashed(tinted: true) }
+                                // Two lines at most, within its column:
+                                // long French names never run into the next.
+                                Text(shortcut.title)
+                                    .font(.caption2.weight(.medium))
+                                    .multilineTextAlignment(.center)
+                                    .lineLimit(2)
+                                    .minimumScaleFactor(0.85)
+                                    .frame(maxWidth: .infinity, alignment: .top)
+                                    .fixedSize(horizontal: false, vertical: true)
+                            }
+                            .foregroundStyle(.tint)
+                            .opacity(shortcut == dragged ? 0 : 1)
+                            .contentShape(.rect)
+                            .gesture(drag(shortcut, from: nil))
+                        }
+                    }
+                }
+            }
+            .frame(maxWidth: .infinity, minHeight: 76)
     }
 
     private func capsule<Content: View>(@ViewBuilder _ content: () -> Content) -> some View {
@@ -1048,8 +1226,13 @@ private struct ShortcutEditor: View {
         .gesture(shortcut == .none ? nil : drag(shortcut, from: side))
     }
 
+    @ViewBuilder
     private func icon(_ shortcut: HomeShortcut) -> some View {
-        Image(systemName: shortcut.symbol ?? "circle.dashed").font(.title3)
+        if let asset = shortcut.assetName {
+            Image(asset).resizable().renderingMode(.template).scaledToFit().frame(width: 24, height: 24)
+        } else {
+            Image(systemName: shortcut.symbol ?? "circle.dashed").font(.title3)
+        }
     }
 
     private func dashed(tinted: Bool) -> some View {
@@ -1471,6 +1654,11 @@ struct CollapsibleGlassCard<Content: View>: View {
                         .font(.caption.weight(.semibold))
                         .rotationEffect(.degrees(isExpanded ? 180 : 0))
                 }
+                // The card's margin is part of the header: a click near its
+                // top or bottom edge opens it too.
+                .padding(.horizontal, 20)
+                .padding(.top, 20)
+                .padding(.bottom, isExpanded ? 18 : 20)
                 .contentShape(Rectangle())
             }
             .buttonStyle(.plain)
@@ -1478,11 +1666,11 @@ struct CollapsibleGlassCard<Content: View>: View {
 
             if isExpanded {
                 content
-                    .padding(.top, 18)
+                    .padding(.horizontal, 20)
+                    .padding(.bottom, 20)
                     .transition(.opacity.combined(with: .move(edge: .top)))
             }
         }
-        .padding(20)
         .frame(maxWidth: .infinity, alignment: .leading)
         .modifier(ModuleTint(color: tintRawValue == AppTint.infused.rawValue && !keepsFeatureTint ? moduleColor : nil))
         .glassEffect(.regular.interactive(), in: .rect(cornerRadius: 28))
@@ -2112,6 +2300,105 @@ private struct WorkoutsCard: View {
             }
         } else {
             withAnimation(.smooth) { WorkoutListening.disable() }
+        }
+    }
+}
+
+
+/// Settings › Home: a song row swiped left, showing what it does, and the
+/// choices under it.
+private struct SongSwipePicker: View {
+    @Binding var selection: String
+
+    private var action: SongSwipeAction { SongSwipeAction(rawValue: selection) ?? .goToAlbum }
+
+    private func color(of action: SongSwipeAction) -> Color {
+        switch action {
+        case .none: Color(uiColor: .systemGray)
+        case .goToAlbum, .goToArtist: Color(uiColor: .systemIndigo)
+        case .playLast: Color(uiColor: .systemOrange)
+        }
+    }
+
+    var body: some View {
+        VStack(spacing: 14) {
+            preview
+            HStack(alignment: .top, spacing: 8) {
+                ForEach(SongSwipeAction.allCases) { option in
+                    let isSelected = option == action
+                    Button {
+                        guard SettingsSwipe.allowsTaps else { return }
+                        withAnimation(.spring(response: 0.4, dampingFraction: 0.8)) { selection = option.rawValue }
+                    } label: {
+                        VStack(spacing: 6) {
+                            Image(systemName: option.symbol)
+                                .font(.body.weight(.semibold))
+                                .foregroundStyle(isSelected ? AnyShapeStyle(.white) : AnyShapeStyle(.tint))
+                                .frame(width: 46, height: 46)
+                                .background(isSelected ? AnyShapeStyle(color(of: option)) : AnyShapeStyle(.tint.opacity(0.15)), in: .circle)
+                            Text(option.title)
+                                .font(.caption2.weight(.medium))
+                                .foregroundStyle(isSelected ? .primary : .secondary)
+                                .multilineTextAlignment(.center)
+                                .lineLimit(2)
+                                .fixedSize(horizontal: false, vertical: true)
+                        }
+                        .frame(maxWidth: .infinity)
+                        .contentShape(.rect)
+                    }
+                    .buttonStyle(.plain)
+                }
+            }
+            .sensoryFeedback(.selection, trigger: selection)
+        }
+    }
+
+    /// A row slid left, the action showing at its end.
+    private var preview: some View {
+        let shown = action != .none
+        return HStack(spacing: 0) {
+            HStack(spacing: 10) {
+                RoundedRectangle(cornerRadius: 5, style: .continuous)
+                    .fill(.tint.opacity(0.35))
+                    .frame(width: 36, height: 36)
+                VStack(alignment: .leading, spacing: 5) {
+                    Capsule().fill(.primary.opacity(0.55)).frame(width: 96, height: 7)
+                    Capsule().fill(.secondary.opacity(0.4)).frame(width: 64, height: 6)
+                }
+                Spacer(minLength: 0)
+            }
+            .padding(.horizontal, 10)
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
+            .background(Color(uiColor: .tertiarySystemFill))
+            if shown {
+                VStack(spacing: 3) {
+                    Image(systemName: action.symbol).font(.subheadline.weight(.semibold))
+                    Text(action.title).font(.caption2.weight(.semibold)).lineLimit(1).minimumScaleFactor(0.7)
+                }
+                .foregroundStyle(.white)
+                .frame(width: 92)
+                .frame(maxHeight: .infinity)
+                .background(color(of: action))
+                .transition(.move(edge: .trailing).combined(with: .opacity))
+                .id(action)
+            }
+        }
+        .frame(height: 56)
+        .clipShape(.rect(cornerRadius: 12, style: .continuous))
+        .accessibilityHidden(true)
+    }
+}
+
+/// A feature that needs a server song on the device: said only while a
+/// server is connected.
+struct StreamingNote: View {
+    let text: LocalizedStringKey
+
+    var body: some View {
+        if SubsonicService.shared.isConfigured {
+            Label(text, systemImage: "arrow.down.circle")
+                .font(.footnote)
+                .foregroundStyle(.secondary)
         }
     }
 }

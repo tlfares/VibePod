@@ -4,6 +4,7 @@ import AVFoundation
 import Combine
 import SwiftUI
 import WebKit
+import AVKit
 import Security
 
 /// The current song's motion artwork, looping silently behind the player.
@@ -513,6 +514,11 @@ enum MusicVideoStore {
 
     static func choice(for id: UUID) -> MusicVideoChoice {
         cache[id] ?? MusicVideoChoice()
+    }
+
+    /// The saved choice, nil when nothing was ever looked up (iCloud Sync).
+    static func storedChoice(for id: UUID) -> MusicVideoChoice? {
+        cache[id]
     }
 
     /// Serial: the last choice always lands last.
@@ -1044,7 +1050,23 @@ final class MusicVideoPlayer: NSObject, ObservableObject, WKScriptMessageHandler
     private var watchedWindows = NSHashTable<UIWindow>.weakObjects()
     private var playingObserver: AnyCancellable?
 
-    private(set) lazy var webView: WKWebView = {
+    private(set) lazy var webView: WKWebView = makeWebView()
+
+    /// A fresh page, in a fresh web process: a stuck one (a video that no
+    /// longer loads, whatever is asked) only gets better this way.
+    private func renewWebView() {
+        let old = webView
+        old.configuration.userContentController.removeScriptMessageHandler(forName: "video")
+        old.navigationDelegate = nil
+        old.stopLoading()
+        old.removeFromSuperview()
+        videoFrame = nil
+        webView = makeWebView()
+        carrier.replace(webView: webView)
+        vpLog("web view renewed")
+    }
+
+    private func makeWebView() -> WKWebView {
         let configuration = WKWebViewConfiguration()
         configuration.allowsInlineMediaPlayback = true
         configuration.mediaTypesRequiringUserActionForPlayback = []
@@ -1064,11 +1086,14 @@ final class MusicVideoPlayer: NSObject, ObservableObject, WKScriptMessageHandler
         view.backgroundColor = .black
         view.scrollView.backgroundColor = .black
         view.scrollView.isScrollEnabled = false
+        // The page fills the video's box even over the screen's edges (in
+        // full screen, the home indicator's inset showed as a black band).
+        view.scrollView.contentInsetAdjustmentBehavior = .never
         view.isUserInteractionEnabled = false
         view.alpha = 0
         view.navigationDelegate = self
         return view
-    }()
+    }
 
     // MARK: Choosing
 
@@ -1193,43 +1218,139 @@ final class MusicVideoPlayer: NSObject, ObservableObject, WKScriptMessageHandler
         }
     }
 
-    /// In iOS's own player: its slider and buttons lead the song.
-    private var isFullScreen = false
+    // MARK: Full screen
+
+    /// VibePod's own full screen: the video alone on black, the song's
+    /// sound and controls (no system player, which took the sound over).
+    @Published private(set) var isFullScreen = false
+    private var fullScreen: MusicVideoFullScreenController?
+
+    /// Where the video goes: full screen first, then the player's cover (or
+    /// the lyrics' small one), else the mini player's.
+    private var wantedRole: MusicVideoHostView.Role {
+        if isFullScreen { return .fullScreen }
+        return isPlayerPresented ? (isSuppressed ? .compact : .large) : .mini
+    }
+
+    /// The cover's place it goes back to, in this view's space (the same
+    /// window only).
+    fileprivate func returnFrame(in view: UIView) -> (frame: CGRect, radius: CGFloat)? {
+        let role: MusicVideoHostView.Role = isPlayerPresented ? (isSuppressed ? .compact : .large) : .mini
+        guard let host = hosts.values.compactMap(\.view).last(where: { $0.role == role && $0.window === view.window }),
+              host.bounds.width > 0, Self.opacity(of: host) > 0.02 || host.alpha == 0 else { return nil }
+        return (host.convert(host.bounds, to: view), host.layer.cornerRadius)
+    }
+
+    func enterFullScreen() {
+        // Over the page of the cover's place (not the menu's preview the
+        // video may be in, which is going away).
+        let role: MusicVideoHostView.Role = isPlayerPresented ? (isSuppressed ? .compact : .large) : .mini
+        guard shownSongID != nil, fullScreen == nil,
+              let place = hosts.values.compactMap(\.view).last(where: { $0.role == role && $0.window != nil }) ?? (carrier.superview != nil ? target : nil),
+              let container = Self.container(of: place) else { return }
+        let start: (frame: CGRect, radius: CGFloat)? = carrier.alpha > 0.5
+            ? (carrier.superview.map { $0.convert(carrier.frame, to: container) } ?? carrier.frame, carrier.cornerRadius) : nil
+        let controller = MusicVideoFullScreenController(start: start)
+        fullScreen = controller
+        isFullScreen = true
+        // In the video's own window (moved to another, a web view goes
+        // blank a moment and shows a still meanwhile). Free to turn once
+        // open: held sideways, it opens upright, then turns.
+        controller.present(in: container)
+        Self.haptic()
+    }
+
+    /// Asked by the full screen once it has flown back.
+    fileprivate func fullScreenDidClose() {
+        fullScreen = nil
+        isFullScreen = false
+        OrientationLock.isVideoFullScreen = false
+        rehost()
+    }
+
+    /// Full screen rotating: the video is moved with the rotation's own
+    /// animation instead of chasing it frame by frame.
+    fileprivate var holdsFollow = false {
+        didSet { if !holdsFollow { boost() } }
+    }
+
+    /// The video put on its full screen place's model values: inside an
+    /// animation, it moves with it, on the render server, instead of
+    /// chasing it a frame late (with `holdsFollow` set meanwhile).
+    @discardableResult
+    fileprivate func placeCarrier(over host: MusicVideoHostView, shift: CGPoint = .zero) -> Bool {
+        if target !== host { rehost() }
+        guard let container = carrier.superview, host.superview === container, shownSongID != nil else { return false }
+        if let below = host.carrierBelow, below.superview === container,
+           container.subviews.firstIndex(of: carrier).map({ $0 + 1 }) != container.subviews.firstIndex(of: below) {
+            container.insertSubview(carrier, belowSubview: below)
+        }
+        animateCarrier(to: host.frame, radius: host.layer.cornerRadius, alpha: host.alpha, shift: shift, role: .fullScreen)
+        return true
+    }
+
+    /// Inside the screen's turn animation: the video goes to its place's
+    /// new frame with that animation, on the render server, held there
+    /// until `endTurnAlong()`.
+    func turnAlong(to host: MusicVideoHostView, shift: CGPoint) {
+        if target !== host { rehost() }
+        guard !isFullScreen, target === host, shownSongID != nil, morphOutStart == nil,
+              let container = carrier.superview, Self.container(of: host) === container else { return }
+        var alpha = CGFloat(1)
+        var view: UIView? = host
+        while let current = view, current !== container {
+            if current.isHidden { alpha = 0; break }
+            alpha *= current.alpha
+            view = current.superview
+        }
+        let frame = host.convert(host.bounds, to: container)
+        let scale = host.bounds.width > 0 ? frame.width / host.bounds.width : 1
+        // Seen all along: no fade in from a hidden frame.
+        if carrier.alpha < alpha { UIView.performWithoutAnimation { carrier.alpha = alpha } }
+        animateCarrier(to: frame, radius: host.layer.cornerRadius * scale, alpha: alpha, shift: shift, role: host.role)
+        holdsFollow = true
+        turnsAlong = true
+    }
+
+    private var turnsAlong = false
+
+    func endTurnAlong() {
+        guard turnsAlong else { return }
+        turnsAlong = false
+        if !isFullScreen { holdsFollow = false }
+    }
+
+    /// Resized once, at once (a web view resized inside an animation goes
+    /// blank until it draws again), then brought from where it's seen by
+    /// a transform alone, which the current animation carries.
+    private func animateCarrier(to target: CGRect, radius: CGFloat, alpha: CGFloat, shift: CGPoint, role: MusicVideoHostView.Role) {
+        let seen = (carrier.layer.presentation()?.frame ?? carrier.frame).offsetBy(dx: shift.x, dy: shift.y)
+        let seenRadius = carrier.layer.presentation() != nil ? carrier.cornerRadius : radius
+        UIView.performWithoutAnimation {
+            carrier.transform = .identity
+            if !carrier.frame.isApproximately(target) {
+                carrier.frame = target
+                carrier.layoutIfNeeded()
+            }
+            guard target.width > 0, target.height > 0, seen.width > 0, seen.height > 0 else { return }
+            let scale = CGSize(width: seen.width / target.width, height: seen.height / target.height)
+            carrier.transform = CGAffineTransform(translationX: seen.midX - target.midX, y: seen.midY - target.midY)
+                .scaledBy(x: scale.width, y: scale.height)
+            carrier.cornerRadius = seenRadius / max(0.01, (scale.width + scale.height) / 2)
+        }
+        carrier.transform = .identity
+        carrier.cornerRadius = radius
+        carrier.alpha = alpha
+        carrier.setShadow(width: target.width, isMini: role == .mini, isFullScreen: role == .fullScreen)
+    }
+
+    /// No video anymore (another song without one, the cover asked for).
+    private func closeFullScreen() {
+        fullScreen?.close()
+    }
 
     /// The frame the video element lives in, for native full screen.
     private var videoFrame: WKFrameInfo?
-
-    /// iOS's own video player, full screen (it turns with the phone); the
-    /// video comes back in place after.
-    func enterFullScreen() {
-        guard shownSongID != nil else { return }
-        let script = "var v = document.querySelector('video'); if (v && v.webkitEnterFullscreen) { v.webkitEnterFullscreen() }"
-        webView.evaluateJavaScript(script, in: videoFrame, in: .page) { result in
-            if case .failure(let error) = result { print("VPDBG fullscreen failed: \(error)") }
-        }
-    }
-
-    /// Full screen, the song follows the video: a move of iOS's slider
-    /// seeks the song, its play and pause buttons play and pause it.
-    private func followVideo(time: Double, state: Int) {
-        let player = MusicPlayerService.shared
-        // Entering full screen may pause it a moment: not a tap.
-        guard state == 1 || state == 2, Date().timeIntervalSince(lastSeek) > 1 else { return }
-        let songTime = time - offset
-        if songTime >= 0, songTime < player.duration, abs(songTime - player.preciseCurrentTime) > 1 {
-            player.seek(to: songTime)
-        }
-        // Only a change of the video's own: never a tug of war with the song.
-        defer { lastFreeState = state }
-        guard let last = lastFreeState, last != state else { return }
-        if state == 2, player.isPlaying {
-            player.pause()
-        } else if state == 1, !player.isPlaying {
-            player.play()
-        }
-    }
-
-    private var lastFreeState: Int?
 
     /// Asked from the video's menu: the picker of another video.
     @Published var picksAnotherVideo = false
@@ -1528,6 +1649,7 @@ final class MusicVideoPlayer: NSObject, ObservableObject, WKScriptMessageHandler
     // MARK: Playing
 
     private func load(_ id: String, durationHint: TimeInterval, keepsStill: Bool = false) {
+        stallReloadedAt = nil
         setAudible(false)
         webView.alpha = 0
         let reloads = keepsStill && id == videoID
@@ -1653,9 +1775,13 @@ final class MusicVideoPlayer: NSObject, ObservableObject, WKScriptMessageHandler
             choice.isKept = true
             MusicVideoStore.setChoice(choice, for: part.id)
         }
-        // The background takes the video's colors at once.
+        // The background takes the video's colors once the cover has
+        // morphed: both at once, the move stutters.
         lastColorsAt = .distantPast
-        if let still { updateColors(from: still) }
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.7) { [weak self] in
+            guard let self, let still = self.still else { return }
+            self.updateColors(from: still)
+        }
     }
 
     /// While the video loads (the cover still there): a word at the top.
@@ -1679,11 +1805,17 @@ final class MusicVideoPlayer: NSObject, ObservableObject, WKScriptMessageHandler
         loadWatch?.cancel()
         let id = videoID
         let work = DispatchWorkItem { [weak self] in
-            guard let self, let song = self.song, let id, self.videoID == id,
-                  self.wantedSongID == song.id, self.shownSongID != song.id else { return }
+            guard let self else { return }
+            guard let song = self.song, let id, self.videoID == id,
+                  self.wantedSongID == song.id, self.shownSongID != song.id else {
+                // Nothing left to wait for: never a word stuck on screen.
+                self.endLoading()
+                return
+            }
             self.vpLog("stalled: ready \(self.isReady) played \(self.hasPlayed) ad \(self.isAd) still \(self.still != nil)")
             if self.stalledRetryID != id {
                 self.stalledRetryID = id
+                self.renewWebView()
                 self.load(id, durationHint: self.videoDuration)
             } else {
                 self.unload()
@@ -1729,6 +1861,8 @@ final class MusicVideoPlayer: NSObject, ObservableObject, WKScriptMessageHandler
     private var appIsActive = UIApplication.shared.applicationState != .background
     /// Back from the lock screen: reloaded if it doesn't play again soon.
     private var resumeDeadline: Date?
+    /// Reloaded for being stuck while shown: once more soon after, a fresh page.
+    private var stallReloadedAt: Date?
     /// The clip's sound is the one heard (the file plays on, silent, as
     /// the clock for the lyrics and the seek bar).
     private(set) var isAudible = false
@@ -1739,6 +1873,7 @@ final class MusicVideoPlayer: NSObject, ObservableObject, WKScriptMessageHandler
 
     private func uncoverIfDrawn() {
         guard isPlayingNow, Date().timeIntervalSince(adoptedAt) > 0.5, carrier.covers else { return }
+        vpLog("uncover")
         carrier.uncover()
     }
 
@@ -1753,7 +1888,7 @@ final class MusicVideoPlayer: NSObject, ObservableObject, WKScriptMessageHandler
         var target = player.preciseCurrentTime + offset
         let play = reachable && (player.isPlaying || !hasPlayed)
         let canSeek = videoFollows && now.timeIntervalSince(lastSeek) > 1.2
-        let free = isFullScreen
+        let free = false
         var script = "window.vp_tick ? vp_tick(\(target), \(play), \(canSeek), \(free)) : null"
         if let timing = mergeTiming {
             let time = player.preciseCurrentTime
@@ -1772,10 +1907,6 @@ final class MusicVideoPlayer: NSObject, ObservableObject, WKScriptMessageHandler
                 guard let self, self.videoID == id, let values = result as? [Double], values.count >= 4 else { return }
                 let (time, state, zone, seeked) = (values[0], Int(values[1]), Int(values[2]), values[3] > 0)
                 let now = Date()
-                if free {
-                    self.followVideo(time: time, state: state)
-                    return
-                }
 
                 if seeked { self.lastSeek = now }
                 self.isInSync = state == 1 && !seeked && abs(time - target) < 0.35
@@ -1795,6 +1926,18 @@ final class MusicVideoPlayer: NSObject, ObservableObject, WKScriptMessageHandler
                 _ = (going, zone, reachable)
                 self.updateVideoAlpha()
 
+                // Shown, but stuck (buffering or frozen) while the song plays:
+                // the page again, then a fresh one.
+                if self.shownSongID != nil, self.resumeDeadline == nil, reachable, player.isPlaying, self.hasPlayed,
+                   zone == 1, state != 1, now.timeIntervalSince(self.lastPlayingAt) > 6, now.timeIntervalSince(self.lastSeek) > 6 {
+                    let again = self.stallReloadedAt.map { now.timeIntervalSince($0) < 40 } ?? false
+                    self.vpLog("stuck while shown (state \(state)): \(again ? "fresh page" : "reload")")
+                    if again { self.renewWebView() }
+                    self.load(id, durationHint: self.videoDuration, keepsStill: true)
+                    self.stallReloadedAt = again ? nil : now
+                    self.lastPlayingAt = now
+                    return
+                }
                 if let deadline = self.resumeDeadline, now > deadline, player.isPlaying {
                     self.resumeDeadline = nil
                     self.load(id, durationHint: self.videoDuration, keepsStill: true)
@@ -1858,13 +2001,20 @@ final class MusicVideoPlayer: NSObject, ObservableObject, WKScriptMessageHandler
     /// While the clip is on, it is the cover: everywhere, playing or not.
     private func setShown(_ id: UUID?) {
         guard shownSongID != id else { return }
+        if id == nil { closeFullScreen() }
         withAnimation(.spring(duration: 0.6, bounce: 0.12)) { shownSongID = id }
         revision += 1
         updateFollowing()
         follow()
         if id == nil {
-            thumbnailImage = nil
-            if colors != nil { colors = nil }
+            // After the morph back to the cover, not during it.
+            let delay = morphOutStart == nil ? 0 : 0.75
+            let video = videoID
+            DispatchQueue.main.asyncAfter(deadline: .now() + delay) { [weak self] in
+                guard let self, self.shownSongID == nil, delay == 0 || self.videoID == video else { return }
+                self.thumbnailImage = nil
+                if self.colors != nil { self.colors = nil }
+            }
         }
         NotificationCenter.default.post(name: Self.stateDidChange, object: nil)
     }
@@ -1888,18 +2038,8 @@ final class MusicVideoPlayer: NSObject, ObservableObject, WKScriptMessageHandler
             // Two clips (a merged song): only the one in front is heard from.
             if type == "ad" || type == "frame", mergeTiming != nil, let id = videoID,
                message.frameInfo.request.url?.absoluteString.contains(id) == false { return }
-            if type == "ad" || type == "frame" || type == "fullscreen", !message.frameInfo.isMainFrame { videoFrame = message.frameInfo }
+            if type == "ad" || type == "frame", !message.frameInfo.isMainFrame { videoFrame = message.frameInfo }
             switch type {
-            case "fullscreen":
-                let on = body["on"] as? Bool ?? false
-                isFullScreen = on
-                lastFreeState = nil
-                lastSeek = Date()
-                vpLog("fullscreen \(on)")
-                // Taken back once iOS's player has let go (and once more, late).
-                for delay in [0.3, 1.2, 3] {
-                    DispatchQueue.main.asyncAfter(deadline: .now() + delay) { MusicPlayerService.shared.reclaimNowPlaying() }
-                }
             case "ready":
                 isReady = true
                 if let duration = body["duration"] as? Double, duration > 0 { videoDuration = duration }
@@ -1909,7 +2049,12 @@ final class MusicVideoPlayer: NSObject, ObservableObject, WKScriptMessageHandler
                 updateVideoAlpha()
             case "error":
                 failed(code: body["code"] as? Int ?? 0, part: body["part"] as? Int)
+            case "size":
+                guard let width = body["width"] as? Double, let height = body["height"] as? Double, width > 0, height > 0 else { return }
+                applyNativeShape(CGFloat(width / height))
             case "frame":
+                // Not mid-morph: the decoding and the redraws it brings stutter it.
+                guard morphStart == nil, morphOutStart == nil, !morphPending else { return }
                 guard let id = videoID, let url = body["data"] as? String else { return }
                 // Decoded away from the main thread: never a hitch mid-animation.
                 Task { [weak self] in
@@ -1987,10 +2132,13 @@ final class MusicVideoPlayer: NSObject, ObservableObject, WKScriptMessageHandler
         boost()
         hosts = hosts.filter { $0.value.view != nil }
         let visible = hosts.values.compactMap(\.view).filter { $0.window != nil }
-        let wanted: MusicVideoHostView.Role = isPlayerPresented ? (isSuppressed ? .compact : .large) : .mini
+        let wanted = wantedRole
         // A flying cover carries the video; else where the cover is.
-        let flies = visible.contains { $0.role == .flight }
-        let host = visible.last { $0.role == .flight }
+        // Full screen first (a menu's preview may still be fading out).
+        let full = isFullScreen ? visible.last { $0.role == .fullScreen } : nil
+        let flies = full == nil && visible.contains { $0.role == .flight }
+        let host = full
+            ?? visible.last { $0.role == .flight }
             ?? visible.last { $0.role == wanted && Self.opacity(of: $0) > 0.02 }
             ?? visible.last { $0.role == wanted }
             ?? (target.flatMap { t in visible.contains { $0 === t } && Self.opacity(of: t) > 0.02 ? t : nil })
@@ -2000,6 +2148,7 @@ final class MusicVideoPlayer: NSObject, ObservableObject, WKScriptMessageHandler
         for view in hosts.values.compactMap(\.view) {
             view.alpha = flies && view.role != .flight ? 0 : 1
         }
+        vpLog("rehost -> \(host.map { "\($0.role)" } ?? "nil") visible=\(visible.map { "\($0.role)" }) window=\(host?.window.map { "\(type(of: $0))" } ?? "-") carrierWindow=\(carrier.window.map { "\(type(of: $0))" } ?? "-")")
         target = host
         updateHolds()
         moveCarrier(to: host)
@@ -2021,6 +2170,13 @@ final class MusicVideoPlayer: NSObject, ObservableObject, WKScriptMessageHandler
     /// (sheets and menus, in views of their own, stay above).
     private static func container(of view: UIView) -> UIView? {
         guard let window = view.window else { return nil }
+        if let host = view as? MusicVideoHostView, host.carriesInside { return host }
+        // Full screen: the view holding its controls (the window may wrap
+        // it in views of its own, which would put the video over them and
+        // keep it from turning with them).
+        if let host = view as? MusicVideoHostView, let below = host.carrierBelow?.superview, host.isDescendant(of: below) {
+            return below
+        }
         var current: UIView = view
         while let parent = current.superview, parent !== window { current = parent }
         return current.superview === window ? current : nil
@@ -2035,8 +2191,15 @@ final class MusicVideoPlayer: NSObject, ObservableObject, WKScriptMessageHandler
         // place went (else it jumps behind the player and vanishes).
         guard morphOutStart == nil,
               let host, let container = Self.container(of: host), carrier.superview !== container else { return }
-        container.addSubview(carrier)
-        if still != nil { carrier.cover(with: still) }
+        let changesWindow = carrier.window !== container.window
+        if let below = host.carrierBelow, below.superview === container {
+            container.insertSubview(carrier, belowSubview: below)
+        } else {
+            container.addSubview(carrier)
+        }
+        // Into another window: black there until it draws again, its still
+        // over it meanwhile. Within one, it keeps playing as it is.
+        if changesWindow, still != nil { carrier.cover(with: still) }
         adoptedAt = Date()
         lastSeek = .distantPast
         vpLog("move carrier -> \(host.role) in \(type(of: container))")
@@ -2052,8 +2215,8 @@ final class MusicVideoPlayer: NSObject, ObservableObject, WKScriptMessageHandler
 
     private func retarget() {
         let visible = hosts.values.compactMap(\.view).filter { $0.window != nil }
-        guard !visible.contains(where: { $0.role == .flight }) else { return }
-        let wanted: MusicVideoHostView.Role = isPlayerPresented ? (isSuppressed ? .compact : .large) : .mini
+        guard isFullScreen || !visible.contains(where: { $0.role == .flight }) else { return }
+        let wanted = wantedRole
         // The place wanted as soon as it's there (it may still be fading
         // in); else the one most in sight (walked only then: this runs
         // every display-link frame).
@@ -2141,11 +2304,19 @@ final class MusicVideoPlayer: NSObject, ObservableObject, WKScriptMessageHandler
             CATransaction.commit()
             return
         }
+        if holdsFollow { return }
         retarget()
+        // A place just added isn't drawn yet (no presentation until the
+        // next commit): the video stays as it is meanwhile, not hidden.
+        if let target, target.window != nil, shownSongID != nil, target.layer.presentation() == nil,
+           let container = carrier.superview, Self.container(of: target) === container {
+            return
+        }
         guard let target, target.window != nil, shownSongID != nil,
               let container = carrier.superview, Self.container(of: target) === container,
               let place = target.layer.presentation(), let base = container.layer.presentation() else {
             if carrier.alpha != 0 {
+                vpLog("follow hides: target=\(target.map { "\($0.role)" } ?? "nil") inWindow=\(target?.window != nil) sameContainer=\(target.map { Self.container(of: $0) === carrier.superview } ?? false)")
                 carrier.alpha = 0
                 lastMotionAt = now
             }
@@ -2156,8 +2327,17 @@ final class MusicVideoPlayer: NSObject, ObservableObject, WKScriptMessageHandler
         var opacity = CGFloat(1)
         var layer: CALayer? = place
         while let current = layer, current !== base {
-            if current.isHidden { opacity = 0; break }
-            opacity *= CGFloat(current.opacity)
+            // A fade in flight is read where it's seen; a plain change
+            // (a cover shown again) at once: the presentation only gets
+            // it at the next commit, a blank frame for the video.
+            let model = current.model()
+            if model.isHidden { opacity = 0; break }
+            if current.opacity == model.opacity {
+                opacity *= CGFloat(model.opacity)
+            } else {
+                let fades = model.animationKeys()?.contains { $0.localizedCaseInsensitiveContains("opacity") } ?? false
+                opacity *= CGFloat(fades ? current.opacity : model.opacity)
+            }
             layer = current.superlayer
         }
         let radius = place.cornerRadius * (place.bounds.width > 0 ? frame.width / place.bounds.width : 1)
@@ -2168,7 +2348,7 @@ final class MusicVideoPlayer: NSObject, ObservableObject, WKScriptMessageHandler
         // never zooms) while the cover around it folds away with its
         // spring.
         if morphPending {
-            let wanted: MusicVideoHostView.Role = isPlayerPresented ? (isSuppressed ? .compact : .large) : .mini
+            let wanted = wantedRole
             if target.role == wanted || target.role == .flight {
                 morphPending = false
                 morphStart = CACurrentMediaTime()
@@ -2182,7 +2362,9 @@ final class MusicVideoPlayer: NSObject, ObservableObject, WKScriptMessageHandler
             if t > 1 { morphStart = nil }
             opacity *= Self.easeInOut(min(1, t / 0.32))
         }
-        let changed = container.subviews.last !== carrier || !carrier.frame.isApproximately(frame)
+        let below = target.carrierBelow.flatMap { $0.superview === container ? $0 : nil }
+        let ordered = below.map { b in container.subviews.firstIndex(of: carrier).map { $0 + 1 } == container.subviews.firstIndex(of: b) } ?? (container.subviews.last === carrier)
+        let changed = !ordered || !carrier.frame.isApproximately(frame)
             || abs(carrier.alpha - opacity) > 0.001 || abs(carrier.cornerRadius - radius) > 0.01
         guard changed || morphStart != nil || morphPending else {
             slowDownIfIdle(at: now)
@@ -2193,11 +2375,14 @@ final class MusicVideoPlayer: NSObject, ObservableObject, WKScriptMessageHandler
         if followsSlowly { boost() }
         CATransaction.begin()
         CATransaction.setDisableActions(true)
-        if container.subviews.last !== carrier { container.bringSubviewToFront(carrier) }
+        if !ordered {
+            if let below { container.insertSubview(carrier, belowSubview: below) } else { container.bringSubviewToFront(carrier) }
+        }
+        if carrier.transform != .identity { carrier.transform = .identity }
         if !carrier.frame.isApproximately(frame) { carrier.frame = frame }
         if abs(carrier.alpha - opacity) > 0.001 { carrier.alpha = opacity }
         carrier.cornerRadius = radius
-        carrier.setShadow(width: frame.width, isMini: target.role == .mini)
+        carrier.setShadow(width: frame.width, isMini: target.role == .mini, isFullScreen: target.role == .fullScreen)
         CATransaction.commit()
     }
 
@@ -2369,6 +2554,23 @@ final class MusicVideoPlayer: NSObject, ObservableObject, WKScriptMessageHandler
         let rect = CGRect(x: crop.minX * CGFloat(cg.width), y: crop.minY * CGFloat(cg.height),
                           width: crop.width * CGFloat(cg.width), height: crop.height * CGFloat(cg.height)).integral
         return cg.cropping(to: rect).map { UIImage(cgImage: $0, scale: image.scale, orientation: image.imageOrientation) } ?? image
+    }
+
+    /// No frames to measure (the Mac): the video's own shape, fitted in
+    /// YouTube's player, gives the bars around a vertical or square clip.
+    private func applyNativeShape(_ aspect: CGFloat) {
+        guard let id = videoID, MusicVideoBars.saved(for: id) == nil else { return }
+        MusicVideoBars.save(BarSample.full, aspect: aspect, for: id)
+        guard !content.isApproximately(BarSample.full) || nativeAspect.map({ abs($0 - aspect) > 0.01 }) ?? true else { return }
+        content = BarSample.full
+        nativeAspect = aspect
+        let shape = shownAspect
+        if abs(shape - self.aspect) > 0.01 {
+            boost()
+            withAnimation(.spring(duration: 0.6, bounce: 0.12)) { self.aspect = shape }
+        }
+        carrier.setNeedsLayout()
+        NotificationCenter.default.post(name: Self.stateDidChange, object: nil)
     }
 
     /// The first seconds' frames tell the bars that stay (a dark scene or
@@ -2554,17 +2756,11 @@ final class MusicVideoPlayer: NSObject, ObservableObject, WKScriptMessageHandler
       }
       addStyle();
       new MutationObserver(addStyle).observe(document.documentElement, { childList: true, subtree: true });
-      function fullscreen(on) {
-        try { window.webkit.messageHandlers.video.postMessage({ type: 'fullscreen', on: on }) } catch (e) {}
-      }
-      // Muted for good: iOS's player turns the sound on at a press of the
-      // volume buttons, and the clip's sound then takes over the song's.
+      // Muted for good: the song's own sound is heard, never the clip's.
       document.addEventListener('volumechange', function (e) {
         var v = e.target;
         if (v && v.tagName === 'VIDEO' && !v.muted) v.muted = true;
       }, true);
-      document.addEventListener('webkitbeginfullscreen', function () { fullscreen(true) }, true);
-      document.addEventListener('webkitendfullscreen', function () { fullscreen(false) }, true);
       var lastAd = null;
       setInterval(function () {
         var p = document.querySelector('.html5-video-player');
@@ -2580,7 +2776,7 @@ final class MusicVideoPlayer: NSObject, ObservableObject, WKScriptMessageHandler
       // Every 0.35 s while things move (or black bars are being looked
       // for); every 1.5 s at rest, the app asking for one at once when a
       // touch may start a move.
-      var canvas = null, fast = true, timer = null;
+      var canvas = null, fast = true, timer = null, sentSize = null;
       function capture() {
         var v = document.querySelector('video');
         if (document.hidden || !v || v.paused || v.readyState < 2 || !v.videoWidth || lastAd) return;
@@ -2590,7 +2786,15 @@ final class MusicVideoPlayer: NSObject, ObservableObject, WKScriptMessageHandler
           if (canvas.width !== w || canvas.height !== h) { canvas.width = w; canvas.height = h }
           canvas.getContext('2d').drawImage(v, 0, 0, w, h);
           window.webkit.messageHandlers.video.postMessage({ type: 'frame', data: canvas.toDataURL('image/jpeg', 0.75) });
-        } catch (e) {}
+        } catch (e) {
+          // On the Mac the frame can't be read back (cross-origin): the
+          // video's own shape at least tells a vertical clip's bars.
+          var size = v.videoWidth + 'x' + v.videoHeight;
+          if (size !== sentSize) {
+            sentSize = size;
+            window.webkit.messageHandlers.video.postMessage({ type: 'size', width: v.videoWidth, height: v.videoHeight });
+          }
+        }
       }
       function schedule() {
         clearTimeout(timer);
@@ -2725,7 +2929,16 @@ private struct FrameSample {
 /// Where the video shows: YouTube's player, centered, cut to the frame
 /// (so black bars fall outside).
 final class MusicVideoHostView: UIView {
-    enum Role { case large, compact, mini, flight }
+    enum Role { case large, compact, mini, flight, fullScreen }
+
+    /// Full screen: the video lies under this view of the same container
+    /// (its controls), not over everything.
+    weak var carrierBelow: UIView?
+
+    /// The video goes inside this view, not over the page: a context
+    /// menu's preview is drawn off screen and shown mirrored, the mirror
+    /// showing only what's inside it.
+    var carriesInside = false
 
     let role: Role
     private let stillView = UIImageView()
@@ -2760,6 +2973,13 @@ final class MusicVideoHostView: UIView {
         guard holds else { return }
         let still = MusicVideoPlayer.shared.still
         if stillView.image !== still { stillView.image = still }
+    }
+
+    override func willMove(toWindow newWindow: UIWindow?) {
+        super.willMove(toWindow: newWindow)
+        // Out before this view leaves: the video never leaves its window
+        // (it would go blank a moment).
+        if newWindow == nil, carriesInside { MusicVideoPlayer.shared.detach(self) }
     }
 
     override func didMoveToWindow() {
@@ -2827,9 +3047,11 @@ final class MusicVideoCarrier: UIView {
 
     /// The cover's shadow for a place this wide (a flight's grows and
     /// shrinks between the two).
-    func setShadow(width: CGFloat, isMini: Bool) {
+    func setShadow(width: CGFloat, isMini: Bool, isFullScreen: Bool = false) {
         let (opacity, radius, y): (CGFloat, CGFloat, CGFloat)
-        if isMini || width < 56 {
+        if isFullScreen {
+            (opacity, radius, y) = (0, 0, 0)
+        } else if isMini || width < 56 {
             let t = isMini ? 0 : min(1, max(0, (width - 40) / 16))
             (opacity, radius, y) = (0.18 + t * 0.08, 3 + t * 9, 1 + t * 6)
         } else {
@@ -2846,6 +3068,12 @@ final class MusicVideoCarrier: UIView {
     }
 
     override init(frame: CGRect) { fatalError("init(webView:)") }
+
+    func replace(webView: WKWebView) {
+        webView.frame = stage.bounds
+        webView.autoresizingMask = [.flexibleWidth, .flexibleHeight]
+        stage.addSubview(webView)
+    }
     required init?(coder: NSCoder) { fatalError("init(coder:) has not been implemented") }
 
     func cover(with image: UIImage?) {
@@ -2901,8 +3129,14 @@ private extension CGRect {
 struct MusicVideoHost: UIViewRepresentable {
     var role: MusicVideoHostView.Role = .large
     var cornerRadius: CGFloat = 0
+    /// The video inside the place (a context menu's preview).
+    var carriesInside = false
 
-    func makeUIView(context: Context) -> MusicVideoHostView { MusicVideoHostView(role: role) }
+    func makeUIView(context: Context) -> MusicVideoHostView {
+        let view = MusicVideoHostView(role: role)
+        view.carriesInside = carriesInside
+        return view
+    }
     func updateUIView(_ view: MusicVideoHostView, context: Context) {
         view.layer.cornerRadius = cornerRadius
         view.setNeedsLayout()
@@ -3258,4 +3492,521 @@ private final class TouchWatcher: UIGestureRecognizer, UIGestureRecognizerDelega
     func gestureRecognizer(_ gestureRecognizer: UIGestureRecognizer, shouldRecognizeSimultaneouslyWith other: UIGestureRecognizer) -> Bool { true }
     func gestureRecognizer(_ gestureRecognizer: UIGestureRecognizer, shouldRequireFailureOf other: UIGestureRecognizer) -> Bool { false }
     func gestureRecognizer(_ gestureRecognizer: UIGestureRecognizer, shouldBeRequiredToFailBy other: UIGestureRecognizer) -> Bool { false }
+}
+
+// MARK: - Full screen
+
+/// Whether the full screen's controls show (a tap, or a few seconds of
+/// playback hides them).
+@MainActor
+final class MusicVideoChrome: ObservableObject {
+    @Published var isVisible = true
+    @Published var isScrubbing = false
+}
+
+/// VibePod's own full screen for a music video: the video alone on black,
+/// in a window of its own over the app. It plays no sound (the song does,
+/// from its file) and rotates freely. It opens out of the cover and flies
+/// back into it; a swipe down closes it.
+final class MusicVideoFullScreenController: UIViewController, UIGestureRecognizerDelegate {
+    private let start: (frame: CGRect, radius: CGFloat)?
+    private var lastSize: CGSize?
+    private let backdrop = UIView()
+    private let host = MusicVideoHostView(role: .fullScreen)
+    private let chrome = MusicVideoChrome()
+    private var controls: UIHostingController<MusicVideoFullScreenControls>!
+    private var chromeObservation: AnyCancellable?
+    private var hideTimer: Timer?
+    /// Laid out by itself (not opening, closing, dragged nor rotating).
+    private var isSettled = false
+    private var isClosing = false
+    private var isTurning = false
+
+    init(start: (frame: CGRect, radius: CGFloat)?) {
+        self.start = start
+        super.init(nibName: nil, bundle: nil)
+    }
+
+    required init?(coder: NSCoder) { fatalError("init(coder:) has not been implemented") }
+
+    override var supportedInterfaceOrientations: UIInterfaceOrientationMask { .allButUpsideDown }
+    override var prefersStatusBarHidden: Bool { !chrome.isVisible }
+    override var preferredStatusBarStyle: UIStatusBarStyle { .lightContent }
+    override var prefersHomeIndicatorAutoHidden: Bool { !chrome.isVisible }
+    override var preferredStatusBarUpdateAnimation: UIStatusBarAnimation { .fade }
+
+    override func viewDidLoad() {
+        super.viewDidLoad()
+        view.backgroundColor = .clear
+        backdrop.backgroundColor = .black
+        backdrop.alpha = 0
+        view.addSubview(backdrop)
+        view.addSubview(host)
+
+        controls = UIHostingController(rootView: MusicVideoFullScreenControls(
+            chrome: chrome,
+            onClose: { [weak self] in self?.close() },
+            onTap: { [weak self] in self?.toggleChrome() },
+            onInteraction: { [weak self] in self?.scheduleHide() }))
+        controls.view.backgroundColor = .clear
+        controls.view.alpha = 0
+        // Always drawn over the video, whatever their order.
+        controls.view.layer.zPosition = 10
+        addChild(controls)
+        view.addSubview(controls.view)
+        controls.didMove(toParent: self)
+        // The video lies between the black and the controls.
+        host.carrierBelow = controls.view
+
+        let pan = UIPanGestureRecognizer(target: self, action: #selector(pan(_:)))
+        pan.delegate = self
+        view.addGestureRecognizer(pan)
+
+        chromeObservation = chrome.$isVisible.dropFirst().removeDuplicates().sink { [weak self] _ in
+            DispatchQueue.main.async { self?.chromeDidChange() }
+        }
+        NotificationCenter.default.addObserver(self, selector: #selector(videoShapeDidChange), name: MusicVideoPlayer.frameDidChange, object: nil)
+    }
+
+
+    // MARK: Presenting
+
+    /// Over everything in the window the video is in, filling it.
+    func present(in container: UIView) {
+        view.frame = container.bounds
+        view.autoresizingMask = [.flexibleWidth, .flexibleHeight]
+        view.overrideUserInterfaceStyle = .dark
+        container.addSubview(view)
+        view.layoutIfNeeded()
+        open()
+    }
+
+    override func viewDidLayoutSubviews() {
+        super.viewDidLayoutSubviews()
+        backdrop.frame = view.bounds.insetBy(dx: -200, dy: -200)
+        controls.view.frame = view.bounds
+        let size = view.bounds.size
+        defer { lastSize = size }
+        if let lastSize, !lastSize.isApproximately(size), !isClosing {
+            turned(from: lastSize)
+        } else if isSettled {
+            placeVideo(in: view.bounds)
+        }
+    }
+
+    private func placeVideo(in bounds: CGRect) {
+        host.frame = MusicVideoPlayer.fittedAlways(bounds)
+        host.layer.cornerRadius = 0
+    }
+
+    /// The cover's place makes sense here when both windows stand the same
+    /// way (else the video zooms out of the middle).
+    private func usable(_ place: (frame: CGRect, radius: CGFloat)?) -> (frame: CGRect, radius: CGFloat)? {
+        guard let place, place.frame.width > 1, place.frame.intersects(view.bounds) else { return nil }
+        return place
+    }
+
+    private func open() {
+        let target = MusicVideoPlayer.fittedAlways(view.bounds)
+        if let start = usable(start) {
+            host.frame = start.frame
+            host.layer.cornerRadius = start.radius
+        } else {
+            host.frame = target.scaled(0.86)
+            host.alpha = 0
+            host.layer.cornerRadius = 24
+        }
+        let player = MusicVideoPlayer.shared
+        UIView.performWithoutAnimation { player.holdsFollow = player.placeCarrier(over: host) }
+        UIView.animate(springDuration: 0.56, bounce: 0.14, initialSpringVelocity: 0, delay: 0, options: [.allowUserInteraction, .beginFromCurrentState]) {
+            self.host.frame = target
+            self.host.layer.cornerRadius = 0
+            self.host.alpha = 1
+            player.placeCarrier(over: self.host)
+        } completion: { _ in
+            guard !self.isClosing else { return }
+            player.holdsFollow = false
+            self.isSettled = true
+            self.view.setNeedsLayout()
+            OrientationLock.isVideoFullScreen = true
+        }
+        UIView.animate(withDuration: 0.32, delay: 0, options: [.curveEaseOut, .allowUserInteraction]) {
+            self.backdrop.alpha = 1
+        }
+        // The controls once the video has nearly landed, then out of the
+        // way while it plays.
+        UIView.animate(withDuration: 0.3, delay: 0.22, options: [.curveEaseOut, .allowUserInteraction]) {
+            self.controls.view.alpha = 1
+            self.setNeedsStatusBarAppearanceUpdate()
+        }
+        scheduleHide()
+    }
+
+    /// Back into the cover it came out of (or fading away when that one
+    /// can't be found), then the window goes.
+    func close(velocity: CGFloat = 0) {
+        guard !isClosing else { return }
+        hideTimer?.invalidate()
+        // Sideways: into the cover as the page stands now (it's turned
+        // too), the app standing up again afterwards if it has to.
+        isClosing = true
+        isSettled = false
+        let player = MusicVideoPlayer.shared
+        let place = usable(player.returnFrame(in: view))
+        let distance = place.map { abs($0.frame.midY - host.frame.midY) } ?? 1
+        let springVelocity = distance > 1 ? velocity / distance : 0
+        UIView.animate(withDuration: 0.18, delay: 0, options: [.curveEaseOut, .beginFromCurrentState]) {
+            self.controls.view.alpha = 0
+        }
+        UIView.animate(withDuration: place == nil ? 0.3 : 0.42, delay: 0, options: [.curveEaseInOut, .beginFromCurrentState]) {
+            self.backdrop.alpha = 0
+        }
+        player.holdsFollow = player.placeCarrier(over: host)
+        UIView.animate(springDuration: 0.5, bounce: place == nil ? 0 : 0.1, initialSpringVelocity: springVelocity, delay: 0, options: [.beginFromCurrentState]) {
+            if let place {
+                self.host.frame = place.frame
+                self.host.layer.cornerRadius = place.radius
+            } else {
+                self.host.frame = self.host.frame.scaled(0.86)
+                self.host.layer.cornerRadius = 24
+                self.host.alpha = 0
+            }
+            player.placeCarrier(over: self.host)
+        } completion: { _ in
+            self.finish()
+        }
+        MusicVideoPlayer.haptic()
+    }
+
+    private func finish() {
+        // The video goes back to its cover first, over which it lies
+        // exactly: only then does this view leave.
+        let player = MusicVideoPlayer.shared
+        player.holdsFollow = false
+        player.fullScreenDidClose()
+        DispatchQueue.main.async {
+            self.view.removeFromSuperview()
+            OrientationLock.refresh()
+        }
+    }
+
+    // MARK: Rotation
+
+    /// Laid out again at another size: the screen turning, inside its own
+    /// animation, which the video follows.
+    private func turned(from old: CGSize) {
+        let size = view.bounds.size
+        let duration = UIView.inheritedAnimationDuration
+        let wasSettled = isSettled || isTurning
+        isTurning = true
+        isSettled = false
+        let player = MusicVideoPlayer.shared
+        // The screen turns about its middle: what's seen now, in the new
+        // bounds, sits that much further.
+        let shift = CGPoint(x: (size.width - old.width) / 2, y: (size.height - old.height) / 2)
+        placeVideo(in: view.bounds)
+        player.holdsFollow = player.placeCarrier(over: host, shift: shift)
+        turnID += 1
+        let id = turnID
+        DispatchQueue.main.asyncAfter(deadline: .now() + duration + 0.05) {
+            guard id == self.turnID, !self.isClosing else { return }
+            player.holdsFollow = false
+            self.isTurning = false
+            self.isSettled = wasSettled
+            self.view.setNeedsLayout()
+        }
+    }
+
+    private var turnID = 0
+
+    @objc private func videoShapeDidChange() {
+        guard isSettled else { return }
+        UIView.animate(springDuration: 0.4, bounce: 0) { self.placeVideo(in: self.view.bounds) }
+    }
+
+    // MARK: Swipe down
+
+    func gestureRecognizerShouldBegin(_ gestureRecognizer: UIGestureRecognizer) -> Bool {
+        guard let pan = gestureRecognizer as? UIPanGestureRecognizer, !isClosing, !chrome.isScrubbing else { return false }
+        let velocity = pan.velocity(in: view)
+        return velocity.y > 0 && velocity.y > abs(velocity.x)
+    }
+
+    @objc private func pan(_ pan: UIPanGestureRecognizer) {
+        let resting = MusicVideoPlayer.fittedAlways(view.bounds)
+        let translation = pan.translation(in: view)
+        let progress = max(0, min(1, translation.y / max(1, view.bounds.height * 0.6)))
+        switch pan.state {
+        case .began:
+            isSettled = false
+            hideTimer?.invalidate()
+            MusicVideoPlayer.shared.holdsFollow = MusicVideoPlayer.shared.placeCarrier(over: host)
+            UIView.animate(withDuration: 0.18) { self.controls.view.alpha = 0 }
+        case .changed:
+            // Follows the finger, shrinking a little, the black clearing.
+            let scale = 1 - progress * 0.32
+            let size = CGSize(width: resting.width * scale, height: resting.height * scale)
+            let center = CGPoint(x: resting.midX + translation.x * 0.6, y: resting.midY + max(0, translation.y) - (resting.height - size.height) * 0.15 + min(0, translation.y) * 0.2)
+            CATransaction.begin()
+            CATransaction.setDisableActions(true)
+            host.frame = CGRect(x: center.x - size.width / 2, y: center.y - size.height / 2, width: size.width, height: size.height)
+            host.layer.cornerRadius = progress * 36
+            backdrop.alpha = 1 - progress * 0.85
+            MusicVideoPlayer.shared.placeCarrier(over: host)
+            CATransaction.commit()
+        case .ended, .cancelled, .failed:
+            let velocity = pan.velocity(in: view).y
+            if pan.state == .ended && (translation.y > 120 || velocity > 800) {
+                close(velocity: velocity)
+            } else {
+                UIView.animate(springDuration: 0.45, bounce: 0.18, initialSpringVelocity: 0, delay: 0, options: [.allowUserInteraction, .beginFromCurrentState]) {
+                    self.host.frame = resting
+                    self.host.layer.cornerRadius = 0
+                    self.backdrop.alpha = 1
+                    if self.chrome.isVisible { self.controls.view.alpha = 1 }
+                    MusicVideoPlayer.shared.placeCarrier(over: self.host)
+                } completion: { _ in
+                    guard !self.isClosing else { return }
+                    MusicVideoPlayer.shared.holdsFollow = false
+                    self.isSettled = true
+                    self.view.setNeedsLayout()
+                }
+                if chrome.isVisible { scheduleHide() }
+            }
+        default:
+            break
+        }
+    }
+
+    // MARK: Controls
+
+    private func toggleChrome() {
+        withAnimation(.easeInOut(duration: 0.25)) { chrome.isVisible.toggle() }
+        if chrome.isVisible { scheduleHide() } else { hideTimer?.invalidate() }
+    }
+
+    /// Hidden after a few seconds of playback without a touch.
+    private func scheduleHide() {
+        hideTimer?.invalidate()
+        hideTimer = Timer.scheduledTimer(withTimeInterval: 3.2, repeats: false) { [weak self] _ in
+            MainActor.assumeIsolated {
+                guard let self, MusicPlayerService.shared.isPlaying, !self.chrome.isScrubbing, !self.isClosing else { return }
+                withAnimation(.easeInOut(duration: 0.35)) { self.chrome.isVisible = false }
+            }
+        }
+    }
+
+    private func chromeDidChange() {
+        UIView.animate(withDuration: 0.25) { self.setNeedsStatusBarAppearanceUpdate() }
+        setNeedsUpdateOfHomeIndicatorAutoHidden()
+    }
+}
+
+private extension CGRect {
+    func scaled(_ factor: CGFloat) -> CGRect {
+        let size = CGSize(width: width * factor, height: height * factor)
+        return CGRect(x: midX - size.width / 2, y: midY - size.height / 2, width: size.width, height: size.height)
+    }
+}
+
+private extension CGSize {
+    func isApproximately(_ other: CGSize) -> Bool {
+        abs(width - other.width) < 1 && abs(height - other.height) < 1
+    }
+}
+
+/// The full screen's controls: closing, the song's own transport (the
+/// video follows it) and its timeline, over soft shades.
+struct MusicVideoFullScreenControls: View {
+    @ObservedObject var chrome: MusicVideoChrome
+    @ObservedObject private var player = MusicPlayerService.shared
+    let onClose: () -> Void
+    let onTap: () -> Void
+    let onInteraction: () -> Void
+
+    @State private var scrubFraction: Double?
+    /// Where the timeline stood when the finger came down: it moves by as
+    /// much as the finger does, from there (no jump to the finger).
+    @State private var scrubStart: Double?
+
+    var body: some View {
+        ZStack {
+            Color.clear
+                .contentShape(Rectangle())
+                .onTapGesture(perform: onTap)
+                .accessibilityHidden(true)
+            if chrome.isVisible {
+                shades
+                    .allowsHitTesting(false)
+                    .transition(.opacity)
+                VStack(spacing: 0) {
+                    topBar
+                    Spacer(minLength: 0)
+                    bottomBar
+                }
+                .padding(.horizontal, 20)
+                .padding(.vertical, 12)
+                .transition(.opacity)
+                // On the video's middle, which is the screen's.
+                transport
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+                    .ignoresSafeArea()
+                    .transition(.opacity)
+            }
+        }
+        .ignoresSafeArea(edges: chrome.isVisible ? [] : .all)
+        .preferredColorScheme(.dark)
+    }
+
+    private var shades: some View {
+        VStack(spacing: 0) {
+            LinearGradient(colors: [.black.opacity(0.55), .clear], startPoint: .top, endPoint: .bottom)
+                .frame(height: 160)
+            Spacer(minLength: 0)
+            LinearGradient(colors: [.clear, .black.opacity(0.65)], startPoint: .top, endPoint: .bottom)
+                .frame(height: 240)
+        }
+        .ignoresSafeArea()
+    }
+
+    private var topBar: some View {
+        HStack {
+            Button(action: onClose) {
+                Image(systemName: "xmark")
+                    .font(.system(size: 17, weight: .semibold))
+                    .frame(width: 44, height: 44)
+                    .glassCircle()
+            }
+            .buttonStyle(.plain)
+            .accessibilityLabel(Text("Close"))
+            Spacer()
+        }
+    }
+
+    private var transport: some View {
+        HStack(spacing: 44) {
+            transportButton("gobackward.10", label: "Back 10 Seconds", size: 26) { skip(by: -10) }
+            Button {
+                player.togglePlayPause()
+                onInteraction()
+            } label: {
+                Image(systemName: player.isPlaying ? "pause.fill" : "play.fill")
+                    .font(.system(size: 34, weight: .semibold))
+                    .contentTransition(.symbolEffect(.replace))
+                    .frame(width: 76, height: 76)
+                    .glassCircle()
+            }
+            .buttonStyle(.plain)
+            .accessibilityLabel(Text(player.isPlaying ? "Pause" : "Play"))
+            transportButton("goforward.10", label: "Forward 10 Seconds", size: 26) { skip(by: 10) }
+        }
+    }
+
+    private func transportButton(_ symbol: String, label: LocalizedStringKey, size: CGFloat, action: @escaping () -> Void) -> some View {
+        Button {
+            action()
+            onInteraction()
+        } label: {
+            Image(systemName: symbol)
+                .font(.system(size: size, weight: .medium))
+                .frame(width: 58, height: 58)
+                .glassCircle()
+        }
+        .buttonStyle(.plain)
+        .accessibilityLabel(Text(label))
+    }
+
+    private var bottomBar: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            if let song = player.currentSong {
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(song.title)
+                        .font(.headline)
+                        .foregroundStyle(.white)
+                    Text(song.artist)
+                        .font(.subheadline)
+                        .foregroundStyle(.white.opacity(0.65))
+                }
+                .lineLimit(1)
+            }
+            TimelineView(.animation(minimumInterval: 1 / 30, paused: !chrome.isVisible)) { _ in
+                timeline
+            }
+        }
+        .frame(maxWidth: 720)
+        .frame(maxWidth: .infinity)
+    }
+
+    private var timeline: some View {
+        let duration = max(player.duration, 0.1)
+        let playing = min(1, max(0, player.preciseCurrentTime / duration))
+        let fraction = scrubFraction ?? playing
+        let shown = fraction * duration
+        let scrubbing = scrubFraction != nil
+        return VStack(spacing: 6) {
+            GeometryReader { geometry in
+                let width = geometry.size.width
+                ZStack(alignment: .leading) {
+                    Capsule().fill(.white.opacity(0.25))
+                    Capsule().fill(.white.opacity(scrubbing ? 1 : 0.85))
+                        .frame(width: max(0, min(width, width * fraction)))
+                }
+                .frame(height: scrubbing ? 10 : 5)
+                .frame(maxHeight: .infinity)
+                .contentShape(Rectangle())
+                .gesture(
+                    DragGesture(minimumDistance: 0)
+                        .onChanged { value in
+                            if scrubStart == nil {
+                                scrubStart = playing
+                                chrome.isScrubbing = true
+                                UISelectionFeedbackGenerator().selectionChanged()
+                            }
+                            let start = scrubStart ?? playing
+                            withAnimation(.interactiveSpring(duration: 0.18)) {
+                                scrubFraction = min(1, max(0, start + value.translation.width / max(1, width)))
+                            }
+                        }
+                        .onEnded { _ in
+                            if let scrubFraction, scrubFraction != scrubStart { player.seek(to: scrubFraction * duration) }
+                            scrubStart = nil
+                            withAnimation(.spring(duration: 0.3)) { scrubFraction = nil }
+                            chrome.isScrubbing = false
+                            onInteraction()
+                        }
+                )
+            }
+            .frame(height: 28)
+            .animation(.spring(duration: 0.3, bounce: 0.2), value: scrubbing)
+            HStack {
+                Text(Self.clock(shown))
+                Spacer()
+                Text("-" + Self.clock(max(0, duration - shown)))
+            }
+            .font(.caption.monospacedDigit().weight(.medium))
+            .foregroundStyle(.white.opacity(scrubbing ? 0.95 : 0.6))
+        }
+        .accessibilityElement(children: .ignore)
+        .accessibilityValue(Text(Self.clock(shown)))
+    }
+
+    private func skip(by seconds: TimeInterval) {
+        let time = player.preciseCurrentTime + seconds
+        player.seek(to: min(max(0, time), max(0, player.duration - 0.5)))
+    }
+
+    private static func clock(_ time: TimeInterval) -> String {
+        let seconds = Int(time.rounded(.down))
+        return String(format: "%d:%02d", seconds / 60, seconds % 60)
+    }
+}
+
+private extension View {
+    /// The full screen's buttons: white symbols on Liquid Glass.
+    func glassCircle() -> some View {
+        foregroundStyle(.white)
+            .shadow(color: .black.opacity(0.25), radius: 2, y: 1)
+            .contentShape(Circle())
+            .glassEffect(.regular.interactive(), in: Circle())
+    }
 }

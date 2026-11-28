@@ -2,40 +2,6 @@ import SwiftUI
 import UIKit
 import Combine
 
-// MARK: - Songs
-
-struct SongsListView: View {
-    @EnvironmentObject private var libraryVM: LibraryViewModel
-    @AppStorage("listSortMode") private var sortModeRawValue = SongListSortMode.title.rawValue
-    @State private var searchText = ""
-    @State private var showHiddenSettingsUnlocked = false
-
-    private var sortMode: SongListSortMode {
-        SongListSortMode(rawValue: sortModeRawValue) ?? .title
-    }
-
-    var body: some View {
-        let songs = searchText.isEmpty ? libraryVM.songs : libraryVM.libraryService.search(query: searchText)
-        IndexedSongTable(songs: songs, sortMode: sortMode, showsPlayButtons: searchText.isEmpty)
-            .ignoresSafeArea()
-            .overlay {
-                if songs.isEmpty {
-                    if searchText.isEmpty {
-                        ContentUnavailableView("No Songs", systemImage: "music.note", description: Text("Songs you import appear here."))
-                    } else {
-                        ContentUnavailableView.search(text: searchText)
-                    }
-                }
-            }
-            .pageTitle("Songs")
-            .pageSearch(text: $searchText, prompt: "Find in Songs")
-            .pageTrailingItem {
-                SortMenu(selection: $sortModeRawValue, options: SongListSortMode.allCases.map { ($0.rawValue, $0.title) })
-            }
-            .hiddenSettingsUnlock(searchText: $searchText, isPresented: $showHiddenSettingsUnlocked)
-    }
-}
-
 /// Typing the secret code in a song search unlocks the hidden settings.
 private struct HiddenSettingsUnlockModifier: ViewModifier {
     @Binding var searchText: String
@@ -263,7 +229,7 @@ struct AlbumGridView: View {
         return highlights.count > 2 ? highlights : []
     }
 
-    static func highlights(_ albums: [Album], count: Int = 15) -> [Album] {
+    static func highlights(_ albums: [Album], count: Int = 30) -> [Album] {
         let played = albums.compactMap { album -> (album: Album, plays: Int, last: Date)? in
             guard let last = album.songs.compactMap(\.lastPlayedAt).max() else { return nil }
             return (album, album.songs.reduce(0) { $0 + $1.playCount }, last)
@@ -397,41 +363,6 @@ struct AlbumGridView: View {
 
 // MARK: - Artists
 
-struct ArtistListView: View {
-    @EnvironmentObject private var libraryVM: LibraryViewModel
-    @State private var searchText = ""
-
-    var body: some View {
-        let artists = searchText.isEmpty
-            ? libraryVM.artists
-            : libraryVM.artists.filter { $0.name.localizedStandardContains(searchText) }
-        List(artists) { artist in
-            RouteLink(.artist(artist.name), showsChevron: true) {
-                HStack(spacing: 14) {
-                    ArtistAvatarView(artistName: artist.name, songs: artist.songs, size: 48)
-                    Text(artist.name)
-                        .font(.body)
-                        .lineLimit(1)
-                }
-            }
-            .listRowInsets(EdgeInsets(top: 6, leading: 20, bottom: 6, trailing: 20))
-            .alignmentGuide(.listRowSeparatorLeading) { _ in 62 }
-        }
-        .listStyle(.plain)
-        .overlay {
-            if artists.isEmpty {
-                if searchText.isEmpty {
-                    ContentUnavailableView("No Artists", systemImage: "music.microphone")
-                } else {
-                    ContentUnavailableView.search(text: searchText)
-                }
-            }
-        }
-        .pageTitle("Artists")
-        .pageSearch(text: $searchText, prompt: "Find in Artists")
-    }
-}
-
 struct QueueSwipeButtons: View {
     let song: Song
     @EnvironmentObject private var playerVM: PlayerViewModel
@@ -508,6 +439,7 @@ struct PlaylistListView: View {
     /// so dragging needs its own mode).
     @State private var isRearranging = false
     @State private var pageWidth: CGFloat = 0
+    @ObservedObject private var programs = ProgramStore.shared
 
     var body: some View {
         let pinnedCount = libraryVM.orderedPinnedPlaylists.count
@@ -543,6 +475,7 @@ struct PlaylistListView: View {
                         Section {
                             Button("New Playlist…", systemImage: "plus") { libraryVM.requestNewPlaylist() }
                             Button("New Autolist…", systemImage: "wand.and.stars") { libraryVM.requestNewAutolist() }
+                            Button("New Program…", systemImage: "rectangle.stack.badge.play") { programs.newProgram() }
                         }
                         if pinnedCount > 1, searchText.isEmpty {
                             Section {
@@ -569,6 +502,9 @@ struct PlaylistListView: View {
             .onChange(of: pinnedCount) { _, count in
                 if count < 2 { isRearranging = false }
             }
+            .sheet(item: $programs.editor) { request in
+                ProgramEditorView(request: request)
+            }
     }
 
     private var sortMode: SortMode { SortMode(rawValue: sortModeRawValue) ?? .title }
@@ -584,6 +520,10 @@ struct PlaylistListView: View {
                     }
                     .padding(.top, 8)
                     .padding(.bottom, 12)
+                }
+                if searchText.isEmpty {
+                    ProgramsShelf(width: pageWidth)
+                        .padding(.top, pinned.isEmpty ? 8 : 0)
                 }
                 LazyVGrid(columns: AlbumLayout.gridColumns(columns), spacing: columns > 2 ? 18 : 22) {
                     ForEach(shown) { playlist in
@@ -634,11 +574,25 @@ private struct PlaylistTableHeader: View {
     let services: AppServices
     let width: CGFloat
     let onRearrange: @MainActor () -> Void
+    /// Changes the root (and so the height) as soon as the shelf comes or goes.
+    let showsPrograms: Bool
+    /// Each program is a line of its own: the height follows their count.
+    let programCount: Int
+    let showsPinned: Bool
     @ObservedObject var libraryVM: LibraryViewModel
 
     var body: some View {
-        PinnedCoverFlow(items: libraryVM.orderedPinnedPlaylists.map(HomeItem.playlist), width: width,
-                        subtitle: PlaylistListView.subtitle, onRearrange: onRearrange)
+        let pinned = libraryVM.orderedPinnedPlaylists
+        VStack(spacing: 0) {
+            if showsPinned, !pinned.isEmpty {
+                PinnedCoverFlow(items: pinned.map(HomeItem.playlist), width: width,
+                                subtitle: PlaylistListView.subtitle, onRearrange: onRearrange)
+                    .padding(.bottom, showsPrograms ? 4 : 0)
+            }
+            if showsPrograms {
+                ProgramsShelf(width: width)
+            }
+        }
             .padding(.top, 8)
             .padding(.bottom, 16)
             .environment(\.appServicesStorage, services)
@@ -682,7 +636,7 @@ private final class PlaylistTableViewController: UITableViewController {
 
     override func viewDidLoad() {
         super.viewDidLoad()
-        tableView.backgroundColor = .systemBackground
+        tableView.backgroundColor = .pageBackground
         tableView.rowHeight = Self.rowHeight
         tableView.separatorStyle = .none
         tableView.keyboardDismissMode = .onDrag
@@ -695,6 +649,12 @@ private final class PlaylistTableViewController: UITableViewController {
             .dropFirst()
             .receive(on: DispatchQueue.main)
             .sink { [weak self] in self?.reloadFromModel() }
+            .store(in: &cancellables)
+        ProgramStore.shared.$programs.map(\.count)
+            .removeDuplicates()
+            .dropFirst()
+            .receive(on: DispatchQueue.main)
+            .sink { [weak self] _ in self?.updateHeader() }
             .store(in: &cancellables)
     }
 
@@ -739,8 +699,12 @@ private final class PlaylistTableViewController: UITableViewController {
     /// The pinned playlists' Cover Flow, while there are some and the rows
     /// are neither searched nor rearranged.
     private func updateHeader() {
-        let width = tableView.bounds.width
-        let shows = !pinnedIDs.isEmpty && searchText.isEmpty && !isRearranging && width > 0
+        // The header spans the table, under the Mac's sidebar too, but its
+        // content keeps to the safe area: sized to what's left.
+        let width = tableView.bounds.width - tableView.safeAreaInsets.left - tableView.safeAreaInsets.right
+        let frameWidth = tableView.bounds.width
+        let showsPrograms = !ProgramStore.shared.programs.isEmpty
+        let shows = (!pinnedIDs.isEmpty || showsPrograms) && searchText.isEmpty && !isRearranging && width > 0
         guard shows else {
             if let header {
                 header.willMove(toParent: nil)
@@ -752,11 +716,14 @@ private final class PlaylistTableViewController: UITableViewController {
         }
         // Also called on every scroll: the root only changes with the width,
         // the Cover Flow follows the pinned playlists on its own.
-        let root = PlaylistTableHeader(services: services, width: width, onRearrange: { [weak self] in self?.onRearrange() }, libraryVM: libraryVM)
+        let root = PlaylistTableHeader(services: services, width: width, onRearrange: { [weak self] in self?.onRearrange() },
+                                       showsPrograms: showsPrograms, programCount: ProgramStore.shared.programs.count,
+                                       showsPinned: !pinnedIDs.isEmpty, libraryVM: libraryVM)
         let header: UIHostingController<PlaylistTableHeader>
         if let existing = self.header {
             header = existing
-            if header.rootView.width != width { header.rootView = root }
+            if header.rootView.width != width || header.rootView.showsPrograms != showsPrograms
+                || header.rootView.showsPinned != root.showsPinned || header.rootView.programCount != root.programCount { header.rootView = root }
         } else {
             header = UIHostingController(rootView: root)
             header.view.backgroundColor = .clear
@@ -764,9 +731,9 @@ private final class PlaylistTableViewController: UITableViewController {
             header.didMove(toParent: self)
             self.header = header
         }
-        let height = header.sizeThatFits(in: CGSize(width: width, height: .greatestFiniteMagnitude)).height
-        if tableView.tableHeaderView !== header.view || abs(header.view.frame.height - height) > 0.5 || abs(header.view.frame.width - width) > 0.5 {
-            header.view.frame = CGRect(x: 0, y: 0, width: width, height: height)
+        let height = header.sizeThatFits(in: CGSize(width: frameWidth, height: .greatestFiniteMagnitude)).height
+        if tableView.tableHeaderView !== header.view || abs(header.view.frame.height - height) > 0.5 || abs(header.view.frame.width - frameWidth) > 0.5 {
+            header.view.frame = CGRect(x: 0, y: 0, width: frameWidth, height: height)
             tableView.tableHeaderView = header.view
         }
     }
@@ -864,7 +831,7 @@ private final class PlaylistTableViewController: UITableViewController {
         .margins(.vertical, 6)
         cell.accessoryType = isRearranging ? .none : .disclosureIndicator
         cell.showsReorderControl = isRearranging && isPinned
-        cell.backgroundColor = .systemBackground
+        cell.backgroundColor = .pageBackground
     }
 
     // MARK: Data source
@@ -1006,38 +973,5 @@ private final class PlaylistTableViewController: UITableViewController {
             }
         ])
         return UIMenu(children: [delete, play, more, edit])
-    }
-}
-
-// MARK: - Genres
-
-struct GenreListView: View {
-    @EnvironmentObject private var libraryVM: LibraryViewModel
-
-    var body: some View {
-        List(libraryVM.genres) { genre in
-            RouteLink(.genre(genre.name), showsChevron: true) {
-                HStack(spacing: 14) {
-                    ArtworkImage(source: genre.artworkSource, cornerRadius: 6, points: 48, placeholderSymbol: "guitars")
-                        .frame(width: 48, height: 48)
-                    VStack(alignment: .leading, spacing: 2) {
-                        Text(genre.name)
-                            .lineLimit(1)
-                        Text("\(genre.songs.count) songs")
-                            .font(.subheadline)
-                            .foregroundStyle(.secondary)
-                    }
-                }
-            }
-            .listRowInsets(EdgeInsets(top: 6, leading: 20, bottom: 6, trailing: 20))
-            .alignmentGuide(.listRowSeparatorLeading) { _ in 62 }
-        }
-        .listStyle(.plain)
-        .overlay {
-            if libraryVM.genres.isEmpty {
-                ContentUnavailableView("No Genres", systemImage: "guitars")
-            }
-        }
-        .pageTitle("Genres")
     }
 }

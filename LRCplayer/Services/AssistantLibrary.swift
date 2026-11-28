@@ -697,7 +697,7 @@ final class AssistantLibrary {
             .sorted { $0.value.count > $1.value.count }
             .prefix(max(top, 5))
             .map { "\($0.value[0].entry.title) – \($0.value[0].entry.artist) (\($0.value.count))" }
-        let artists = Dictionary(grouping: plays) { ArtistMerges.main(for: $0.entry.artist) }
+        let artists = Dictionary(grouping: plays) { ListeningStatsService.shared.artist(for: $0.entry) }
             .sorted { $0.value.count > $1.value.count }
             .prefix(5)
             .map { "\($0.key) (\($0.value.count))" }
@@ -912,7 +912,7 @@ final class AssistantLibrary {
             "Plays in the period: \(entries.count), \(duration(time)).",
             "Top songs:"
         ] + top({ label($0.title, $0.artist, id: $0.songID) }, 15)
-          + ["Top artists:"] + top(\.artist, 10)
+          + ["Top artists:"] + top(ListeningStatsService.shared.artist(for:), 10)
           + ["Top albums:"] + top({ entry in songsByID[entry.songID].map(albumLabel) ?? "\(entry.album) — \(entry.artist)" }, 10)).joined(separator: "\n")
     }
 

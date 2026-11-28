@@ -1,9 +1,14 @@
+import GameController
 import SwiftUI
+import CoreImage
 
 /// The Search tab: browse genres when idle, library-wide results while typing.
 struct SearchView: View {
     @EnvironmentObject private var libraryVM: LibraryViewModel
-    @EnvironmentObject private var playerVM: PlayerViewModel
+    /// Only to play: observed, the page (and its sorted shelves) redrew
+    /// at every lyric line and slowed the pages opened from it.
+    private var playerVM: PlayerViewModel { AppModel.shared.playerVM }
+    @State private var orderCache = BrowseOrderCache()
     @State private var query = ""
     @State private var results = SearchResults()
     @State private var showHiddenSettingsUnlocked = false
@@ -242,7 +247,11 @@ struct SearchView: View {
 
     /// The genres with the most songs first.
     private var defaultGenres: [Genre] {
-        libraryVM.genres.sorted {
+        orderCache.genres(libraryVM.genres) { Self.sortedGenres($0) }
+    }
+
+    private static func sortedGenres(_ genres: [Genre]) -> [Genre] {
+        genres.sorted {
             // "Unknown" goes last.
             Self.isUnknown($0.name) != Self.isUnknown($1.name)
                 ? Self.isUnknown($1.name)
@@ -276,7 +285,11 @@ struct SearchView: View {
 
     /// Most-played-in-library first: the artists with the most songs.
     private var defaultArtists: [Artist] {
-        libraryVM.artists.sorted {
+        orderCache.artists(libraryVM.artists) { Self.sortedArtists($0) }
+    }
+
+    private static func sortedArtists(_ artists: [Artist]) -> [Artist] {
+        artists.sorted {
             // "Unknown" goes last.
             Self.isUnknown($0.name) != Self.isUnknown($1.name)
                 ? Self.isUnknown($1.name)
@@ -350,6 +363,7 @@ struct SearchView: View {
                             .onTapGesture { playerVM.play(song: song, from: results.songs) }
                             .contextMenu { SongContextMenu(song: song, onInfo: { infoSong = song }) }
                             .swipeActions(edge: .leading) { QueueSwipeButtons(song: song) }
+                            .swipeActions(edge: .trailing) { SwipeLeftButtons(song: song) }
                     }
                 }
             }
@@ -369,6 +383,7 @@ struct SearchView: View {
                         .onTapGesture { playerVM.play(song: match.song, from: results.lyricMatches.map(\.song)) }
                         .contextMenu { SongContextMenu(song: match.song, onInfo: { infoSong = match.song }) }
                         .swipeActions(edge: .leading) { QueueSwipeButtons(song: match.song) }
+                        .swipeActions(edge: .trailing) { SwipeLeftButtons(song: match.song) }
                     }
                 }
             }
@@ -583,24 +598,37 @@ struct BrowseCard: View {
 /// bottom-right corners, almost nothing along the sides.
 struct GlassRim: View {
     let cornerRadius: CGFloat
+    /// Stronger on the bands that stand out (the programs, the Wrapped):
+    /// a brighter edge, and a soft glow where the light catches it.
+    var intensity: CGFloat = 1
+
+    private var gradient: LinearGradient {
+        LinearGradient(
+            stops: [
+                .init(color: .white.opacity(min(1, 0.28 * intensity)), location: 0),
+                .init(color: .white.opacity(min(1, 0.06 * intensity)), location: 0.3),
+                .init(color: .white.opacity(min(1, 0.02 * intensity)), location: 0.6),
+                .init(color: .white.opacity(min(1, 0.14 * intensity)), location: 1)
+            ],
+            startPoint: .topLeading,
+            endPoint: .bottomTrailing
+        )
+    }
 
     var body: some View {
-        RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
-            .strokeBorder(
-                LinearGradient(
-                    stops: [
-                        .init(color: .white.opacity(0.28), location: 0),
-                        .init(color: .white.opacity(0.06), location: 0.3),
-                        .init(color: .white.opacity(0.02), location: 0.6),
-                        .init(color: .white.opacity(0.14), location: 1)
-                    ],
-                    startPoint: .topLeading,
-                    endPoint: .bottomTrailing
-                ),
-                lineWidth: 0.75
-            )
-            .blendMode(.plusLighter)
-            .allowsHitTesting(false)
+        let shape = RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
+        ZStack {
+            if intensity > 1 {
+                shape
+                    .strokeBorder(gradient, lineWidth: 2)
+                    .blur(radius: 1.5)
+                    .opacity(0.35)
+                    .clipShape(shape)
+            }
+            shape.strokeBorder(gradient, lineWidth: intensity > 1 ? 0.9 : 0.75)
+        }
+        .blendMode(.plusLighter)
+        .allowsHitTesting(false)
     }
 }
 
@@ -620,8 +648,93 @@ struct ArtistPhotoCard: View {
     let photo: ArtworkSource
 
     var body: some View {
-        PhotoCard(title: title) { points in
-            ArtworkImage(source: photo, cornerRadius: 0, points: points)
+        PhotoCard(title: title, source: .artwork(photo))
+    }
+}
+
+/// What a photo card shows: an artwork, or a bundled picture.
+enum PhotoCardSource: Hashable {
+    case artwork(ArtworkSource)
+    case bundled(String)
+
+    var key: String {
+        switch self {
+        case let .artwork(source): "a-\(source.cacheKey)"
+        case let .bundled(name): "b-\(name)"
+        }
+    }
+}
+
+/// A photo card's two pictures, made once off the main thread: the photo at
+/// the size it's drawn, and its blurred backdrop as a tiny bitmap. (A live
+/// blur on every card was redrawn each frame and made the shelves stutter.)
+final class PhotoCardImages: @unchecked Sendable {
+    static let shared = PhotoCardImages()
+
+    struct Pair {
+        let photo: UIImage
+        let backdrop: UIImage
+    }
+
+    private final class Box {
+        let pair: Pair
+        init(_ pair: Pair) { self.pair = pair }
+    }
+
+    private let cache: NSCache<NSString, Box> = {
+        let cache = NSCache<NSString, Box>()
+        cache.countLimit = 160
+        return cache
+    }()
+    private let queue = DispatchQueue(label: "com.fares.lrc.player.photocards", qos: .userInitiated, attributes: .concurrent)
+    private static let context = CIContext(options: [.cacheIntermediates: false])
+
+    func cached(_ source: PhotoCardSource) -> Pair? {
+        cache.object(forKey: source.key as NSString)?.pair
+    }
+
+    func load(_ source: PhotoCardSource) async -> Pair? {
+        if let pair = cached(source) { return pair }
+        let photo: UIImage?
+        switch source {
+        case let .artwork(artwork):
+            photo = await ArtworkImageCache.shared.image(for: artwork, points: 130)
+        case let .bundled(name):
+            photo = UIImage(named: name)
+        }
+        guard let photo else { return nil }
+        return await withCheckedContinuation { continuation in
+            queue.async { [self] in
+                let pair = Self.make(from: photo)
+                if let pair { cache.setObject(Box(pair), forKey: source.key as NSString) }
+                continuation.resume(returning: pair)
+            }
+        }
+    }
+
+    private static func make(from image: UIImage) -> Pair? {
+        // The sharp photo, about the card's height on a 3x screen.
+        let photo = scaled(image, maxPixels: 400) ?? image
+        guard let small = scaled(image, maxPixels: 48), let cgSmall = small.cgImage else { return nil }
+        let input = CIImage(cgImage: cgSmall)
+        let blurred = input.clampedToExtent()
+            .applyingGaussianBlur(sigma: 3.5)
+            .cropped(to: input.extent)
+        guard let output = context.createCGImage(blurred, from: input.extent) else { return nil }
+        return Pair(photo: photo, backdrop: UIImage(cgImage: output))
+    }
+
+    private static func scaled(_ image: UIImage, maxPixels: CGFloat) -> UIImage? {
+        let pixelSize = CGSize(width: image.size.width * image.scale, height: image.size.height * image.scale)
+        let longest = max(pixelSize.width, pixelSize.height)
+        guard longest > 0 else { return nil }
+        let factor = min(1, maxPixels / longest)
+        let size = CGSize(width: max(1, (pixelSize.width * factor).rounded()), height: max(1, (pixelSize.height * factor).rounded()))
+        let format = UIGraphicsImageRendererFormat()
+        format.scale = 1
+        format.opaque = true
+        return UIGraphicsImageRenderer(size: size, format: format).image { _ in
+            image.draw(in: CGRect(origin: .zero, size: size))
         }
     }
 }
@@ -629,32 +742,52 @@ struct ArtistPhotoCard: View {
 /// A photo on a wide card: blown up and blurred to fill the width, with the
 /// photo itself, at the card's height, on the right edge melting into it.
 /// The name sits on the left, over the blur.
-struct PhotoCard<Photo: View>: View {
+struct PhotoCard: View {
     let title: String
-    @ViewBuilder let photo: (_ points: CGFloat) -> Photo
+    let source: PhotoCardSource
+
+    @State private var pair: PhotoCardImages.Pair?
+
+    init(title: String, source: PhotoCardSource) {
+        self.title = title
+        self.source = source
+        // Already made: drawn on the first frame, no fade while scrolling back.
+        _pair = State(initialValue: PhotoCardImages.shared.cached(source))
+    }
 
     var body: some View {
         let height: CGFloat = 108
         ZStack(alignment: .topLeading) {
-            // In an overlay, so a fill-scaled photo can't widen the card and
-            // push the name out of it.
-            Color.clear.overlay { photo(120) }
-                .scaleEffect(1.4)
-                .blur(radius: 22, opaque: true)
-                .overlay(Color.black.opacity(0.18))
-            photo(300)
-                .frame(width: height * 1.2, height: height * 1.2)
-                .offset(y: height * 0.1)
-                .frame(width: height * 1.2, height: height)
-                .clipped()
-                .mask {
-                    LinearGradient(
-                        stops: [.init(color: .clear, location: 0), .init(color: .black, location: 0.5)],
-                        startPoint: .leading,
-                        endPoint: .trailing
-                    )
+            Color(white: 0.16)
+            if let pair {
+                // In an overlay, so a fill-scaled photo can't widen the card
+                // and push the name out of it.
+                Color.clear.overlay {
+                    Image(uiImage: pair.backdrop)
+                        .resizable()
+                        .interpolation(.medium)
+                        .scaledToFill()
                 }
-                .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .trailing)
+                .scaleEffect(1.4)
+                .overlay(Color.black.opacity(0.18))
+                .transition(.opacity)
+                Image(uiImage: pair.photo)
+                    .resizable()
+                    .scaledToFill()
+                    .frame(width: height * 1.2, height: height * 1.2)
+                    .offset(y: height * 0.1)
+                    .frame(width: height * 1.2, height: height)
+                    .clipped()
+                    .mask {
+                        LinearGradient(
+                            stops: [.init(color: .clear, location: 0), .init(color: .black, location: 0.5)],
+                            startPoint: .leading,
+                            endPoint: .trailing
+                        )
+                    }
+                    .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .trailing)
+                    .transition(.opacity)
+            }
             LinearGradient(colors: [.black.opacity(0.35), .clear], startPoint: .leading, endPoint: .center)
             Text(title)
                 .font(.headline)
@@ -667,7 +800,38 @@ struct PhotoCard<Photo: View>: View {
         .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
         .overlay { GlassRim(cornerRadius: 12) }
         .contentShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
-        .transition(.opacity)
+        .task(id: source) {
+            guard pair == nil || PhotoCardImages.shared.cached(source) == nil else { return }
+            let loaded = await PhotoCardImages.shared.load(source)
+            guard !Task.isCancelled else { return }
+            withAnimation(.easeOut(duration: 0.2)) { pair = loaded }
+        }
+    }
+}
+
+/// The shelves' default orders, sorted again only when the library's
+/// genres or artists change, not on every pass of the page.
+@MainActor private final class BrowseOrderCache {
+    private var genreSource: [Genre]?
+    private var genreOrder: [Int] = []
+    private var artistSource: [Artist]?
+    private var artistOrder: [Int] = []
+
+    // The order is kept as positions in the source: an edited song (same
+    // genre, same count) still shows through the current items.
+    func genres(_ source: [Genre], sort: ([Genre]) -> [Genre]) -> [Genre] {
+        if genreSource != source { genreOrder = Self.positions(of: sort(source), in: source); genreSource = source }
+        return genreOrder.map { source[$0] }
+    }
+
+    func artists(_ source: [Artist], sort: ([Artist]) -> [Artist]) -> [Artist] {
+        if artistSource != source { artistOrder = Self.positions(of: sort(source), in: source); artistSource = source }
+        return artistOrder.map { source[$0] }
+    }
+
+    private static func positions<Item: Identifiable>(of sorted: [Item], in source: [Item]) -> [Int] {
+        let index = Dictionary(source.enumerated().map { ($1.id, $0) }, uniquingKeysWith: { a, _ in a })
+        return sorted.compactMap { index[$0.id] }
     }
 }
 
@@ -676,14 +840,10 @@ private struct GenreCard: View {
 
     var body: some View {
         let style = GenreStyle(genre.name)
-        if let image = style.image {
+        if let image = style.imageName {
             // Public-domain (CC0) photos of instruments and gear, from
             // Wikimedia Commons, bundled: no people.
-            PhotoCard(title: genre.name) { _ in
-                Image(uiImage: image)
-                    .resizable()
-                    .scaledToFill()
-            }
+            PhotoCard(title: genre.name, source: .bundled(image))
         } else {
             GenreIllustrationCard(title: genre.name, style: style)
         }
@@ -694,8 +854,8 @@ private struct GenreCard: View {
 struct GenreStyle {
     let symbol: String
     let hue: Double
-    /// The bundled photo, for the genres that have one.
-    let image: UIImage?
+    /// The bundled photo's asset name, for the genres that have one.
+    let imageName: String?
 
     init(_ name: String) {
         let name = name.lowercased()
@@ -723,7 +883,7 @@ struct GenreStyle {
         ]
         let match = table.first { $0.0.contains(where: name.contains) }
         symbol = match?.1 ?? "music.note.list"
-        image = match?.3.flatMap { UIImage(named: "Genre-\($0)") }
+        imageName = match?.3.map { "Genre-\($0)" }
         // Unmatched genres still get a steady color of their own.
         hue = match?.2 ?? Double(abs(name.unicodeScalars.reduce(0) { ($0 &* 31) &+ Int($1.value) }) % 360) / 360
     }
@@ -797,10 +957,12 @@ private extension View {
     /// Like Apple Music: a drag hides the keyboard and keeps the search. The
     /// search field lives in the UIKit navigation bar, out of reach of
     /// SwiftUI's focus, so the first responder is resigned directly.
+    /// Not with a real keyboard (the Mac, an iPad's): there's no keyboard
+    /// to hide, and scrolling the results shouldn't take the field's focus.
     func dismissesKeyboardOnScroll() -> some View {
-        scrollDismissesKeyboard(.immediately)
+        scrollDismissesKeyboard(MacApp.isActive ? .never : .immediately)
             .onScrollPhaseChange { _, phase in
-                guard phase == .interacting else { return }
+                guard phase == .interacting, !MacApp.isActive, GCKeyboard.coalesced == nil else { return }
                 UIApplication.shared.sendAction(#selector(UIResponder.resignFirstResponder), to: nil, from: nil, for: nil)
             }
     }

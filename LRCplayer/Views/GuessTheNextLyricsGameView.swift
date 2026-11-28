@@ -260,7 +260,7 @@ final class GuessTheNextLyricsGame: ObservableObject {
         stopAudio()
         guard song.duration > 0 else { return }
 
-        let player = AVPlayer(url: song.playableFileURL)
+        let player = AVPlayer(url: song.excerptURL)
         let safeStart = min(max(startTime, 0), max(0, song.duration - 0.1))
         audioPlayer = player
 

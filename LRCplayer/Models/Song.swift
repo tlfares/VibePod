@@ -7,6 +7,8 @@ import UIKit
 enum SongSource: String, Codable {
     case appFile
     case mediaLibrary
+    /// On an OpenSubsonic server: streamed, or played from its download.
+    case subsonic
 }
 
 struct Song: Identifiable, Codable, Equatable {
@@ -29,6 +31,10 @@ struct Song: Identifiable, Codable, Equatable {
     var source: SongSource?
     var mediaLibraryPersistentID: UInt64?
     var albumArtist: String?
+    /// The server's song ID (`.subsonic`).
+    var remoteID: String?
+    /// The server's cover art ID (`.subsonic`).
+    var remoteCoverID: String?
 
     init(
         id: UUID = UUID(),
@@ -77,6 +83,9 @@ struct Song: Identifiable, Codable, Equatable {
     /// `fileURL`, rebased on the current Documents folder when the stored
     /// absolute path points into an old app container (reinstall, restore).
     var playableFileURL: URL {
+        if sourceKind == .subsonic, let remoteID {
+            return SubsonicDownloads.localURL(remoteID: remoteID, format: format)
+        }
         guard fileURL.isFileURL, !FileManager.default.fileExists(atPath: fileURL.path) else { return fileURL }
         let components = fileURL.pathComponents
         guard let index = components.lastIndex(of: "Documents"), index + 1 < components.count else { return fileURL }
@@ -93,6 +102,17 @@ struct Song: Identifiable, Codable, Equatable {
     var isMediaLibraryItem: Bool {
         sourceKind == .mediaLibrary
     }
+
+    var isRemote: Bool { sourceKind == .subsonic }
+
+    /// A server song whose file is on the device.
+    var isDownloaded: Bool {
+        isRemote && FileManager.default.fileExists(atPath: playableFileURL.path)
+    }
+
+    /// The file is here (app file, synced or downloaded), so file-based
+    /// features (AutoMix, Sing, Haptics…) can use it.
+    var hasLocalAudio: Bool { !isRemote || isDownloaded }
 
     /// Artwork bytes for this song. Not persisted in songs.json anymore: it is
     /// served lazily from disk (one file per song) with an in-memory cache, so
@@ -184,11 +204,25 @@ struct Song: Identifiable, Codable, Equatable {
         lhs.id == rhs.id
     }
 
+    /// `==` only says it's the same song; this says nothing in it changed
+    /// (tags, plays, lyrics). Used to find what to sync.
+    func hasSameContent(as other: Song) -> Bool {
+        id == other.id
+            && title == other.title && artist == other.artist && album == other.album
+            && albumArtist == other.albumArtist && genre == other.genre
+            && year == other.year && trackNumber == other.trackNumber && discNumber == other.discNumber
+            && duration == other.duration
+            && playCount == other.playCount && lastPlayedAt == other.lastPlayedAt
+            && lrcFilePath == other.lrcFilePath
+            && fileURL == other.fileURL && remoteID == other.remoteID
+    }
+
     enum CodingKeys: String, CodingKey {
         case id, title, artist, album, genre, duration
         case fileURL, artworkData, addedAt, lastPlayedAt
         case playCount, trackNumber, discNumber, year, lrcFilePath
         case fileSize, format, source, mediaLibraryPersistentID, albumArtist
+        case remoteID, remoteCoverID
     }
 
     init(from decoder: Decoder) throws {
@@ -212,6 +246,8 @@ struct Song: Identifiable, Codable, Equatable {
         source = try c.decodeIfPresent(SongSource.self, forKey: .source)
         mediaLibraryPersistentID = try c.decodeIfPresent(UInt64.self, forKey: .mediaLibraryPersistentID)
         albumArtist = try c.decodeIfPresent(String.self, forKey: .albumArtist)
+        remoteID = try c.decodeIfPresent(String.self, forKey: .remoteID)
+        remoteCoverID = try c.decodeIfPresent(String.self, forKey: .remoteCoverID)
         if let legacyArtwork = try c.decodeIfPresent(Data.self, forKey: .artworkData) {
             ArtworkStore.spillLegacy(legacyArtwork, for: id)
         }
@@ -238,6 +274,8 @@ struct Song: Identifiable, Codable, Equatable {
         try c.encodeIfPresent(source, forKey: .source)
         try c.encodeIfPresent(mediaLibraryPersistentID, forKey: .mediaLibraryPersistentID)
         try c.encodeIfPresent(albumArtist, forKey: .albumArtist)
+        try c.encodeIfPresent(remoteID, forKey: .remoteID)
+        try c.encodeIfPresent(remoteCoverID, forKey: .remoteCoverID)
     }
 }
 

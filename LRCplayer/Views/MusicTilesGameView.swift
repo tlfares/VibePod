@@ -1,5 +1,8 @@
 import Accelerate
 import AVFoundation
+#if targetEnvironment(macCatalyst)
+import CoreAudio
+#endif
 import Synchronization
 import SwiftUI
 import UIKit

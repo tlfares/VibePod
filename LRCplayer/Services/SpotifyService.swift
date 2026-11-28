@@ -554,3 +554,206 @@ final class SpotifyTrackMetaStore {
 private extension SpotifyTrackMeta {
     var isEmpty: Bool { year == nil && coverURL == nil }
 }
+
+// MARK: - Catalog (artists and their releases)
+
+/// An artist found on Spotify.
+struct SpotifyArtist: Identifiable, Hashable, Sendable {
+    var id: String { uri }
+    let uri: String
+    let name: String
+    let imageURL: URL?
+    let isVerified: Bool
+}
+
+/// An album, EP or single of an artist, with its cover.
+struct SpotifyRelease: Identifiable, Hashable, Sendable {
+    var id: String { uri }
+    let uri: String
+    let name: String
+    let year: Int?
+    let kind: String
+    let coverURL: URL?
+    /// About 300 px, for a grid.
+    let thumbnailURL: URL?
+
+    /// The same cover at full size (1500 px or so) where Spotify has it:
+    /// the 640 px link with another size code.
+    var largeCoverURL: URL? {
+        guard let coverURL else { return nil }
+        let link = coverURL.absoluteString
+        guard link.contains("ab67616d0000b273") else { return coverURL }
+        return URL(string: link.replacingOccurrences(of: "ab67616d0000b273", with: "ab67616d000082c1"))
+    }
+}
+
+/// Artists and their discographies, through the web player's own API with
+/// the anonymous token of an embed page (the same route as the playlist
+/// import): no account needed.
+enum SpotifyCatalog {
+    private static let searchArtistsHash = "7bf95d754fdbe32c8b161fbbe54d1ae50974900df4dce4c8f1afcbcad153224d"
+    private static let discographyHash = "5e07d323febb57b4a56a42abbf781490e58764aa45feb6e3dc0591564fc56599"
+
+    static func searchArtists(_ term: String) async throws -> [SpotifyArtist] {
+        let trimmed = term.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty else { return [] }
+        let data = try await query("searchArtists", hash: searchArtistsHash, variables: [
+            "searchTerm": trimmed,
+            "offset": 0,
+            "limit": 20,
+            "numberOfTopResults": 5,
+            "includeAudiobooks": false,
+            "includePreReleases": false,
+            "includeLocalConcertsField": false,
+            "includeArtistHasConcertsField": false,
+        ])
+        let response = try JSONDecoder().decode(ArtistSearchResponse.self, from: data)
+        return (response.data?.searchV2?.artists?.items ?? []).compactMap { item in
+            guard let artist = item.data, let uri = artist.uri, let name = artist.profile?.name else { return nil }
+            let image = artist.visuals?.avatarImage?.sources?
+                .min { abs(($0.width ?? 0) - 320) < abs(($1.width ?? 0) - 320) }?
+                .url.flatMap(URL.init(string:))
+            return SpotifyArtist(uri: uri, name: name, imageURL: image, isVerified: artist.onPlatformReputationTrait?.verification?.isVerified ?? false)
+        }
+    }
+
+    /// Every release of the artist, newest first.
+    static func releases(of artist: SpotifyArtist) async throws -> [SpotifyRelease] {
+        var releases: [SpotifyRelease] = []
+        var offset = 0
+        var total = Int.max
+        while offset < min(total, 400) {
+            let data = try await query("queryArtistDiscographyAll", hash: discographyHash, variables: [
+                "uri": artist.uri,
+                "offset": offset,
+                "limit": 50,
+                "order": "DATE_DESC",
+            ])
+            let page = try JSONDecoder().decode(DiscographyResponse.self, from: data).data?.artistUnion?.discography?.all
+            let items = page?.items ?? []
+            total = page?.totalCount ?? 0
+            releases += items.flatMap { $0.releases?.items ?? [] }.compactMap { release in
+                guard let uri = release.uri, let name = release.name else { return nil }
+                let sources = release.coverArt?.sources ?? []
+                let cover = sources.max { ($0.width ?? 0) < ($1.width ?? 0) }?.url.flatMap(URL.init(string:))
+                let thumbnail = sources.min { abs(($0.width ?? 0) - 300) < abs(($1.width ?? 0) - 300) }?.url.flatMap(URL.init(string:))
+                return SpotifyRelease(uri: uri, name: name, year: release.date?.year, kind: release.type ?? "", coverURL: cover, thumbnailURL: thumbnail ?? cover)
+            }
+            if items.isEmpty { break }
+            offset += items.count
+        }
+        return releases
+    }
+
+    /// The cover's bytes, at full size when Spotify has it.
+    static func coverData(for release: SpotifyRelease) async throws -> Data {
+        for url in [release.largeCoverURL, release.coverURL].compactMap(\.self) {
+            if let (data, response) = try? await URLSession.shared.data(from: url),
+               (response as? HTTPURLResponse)?.statusCode == 200, UIImage(data: data) != nil {
+                return data
+            }
+        }
+        throw SpotifyError.network
+    }
+
+    // MARK: Requests
+
+    private static func query(_ operation: String, hash: String, variables: [String: Any]) async throws -> Data {
+        let body = try JSONSerialization.data(withJSONObject: [
+            "operationName": operation,
+            "variables": variables,
+            "extensions": ["persistedQuery": ["version": 1, "sha256Hash": hash]],
+        ])
+        // A stale token answers 401: a new one, once.
+        for attempt in 0..<2 {
+            let token = try await SpotifyWebToken.shared.token(renewing: attempt > 0)
+            var request = URLRequest(url: URL(string: "https://api-partner.spotify.com/pathfinder/v2/query")!)
+            request.httpMethod = "POST"
+            request.timeoutInterval = 20
+            request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
+            request.setValue("application/json;charset=UTF-8", forHTTPHeaderField: "Content-Type")
+            request.setValue("WebPlayer", forHTTPHeaderField: "App-Platform")
+            request.httpBody = body
+            let data: Data
+            let response: URLResponse
+            do {
+                (data, response) = try await URLSession.shared.data(for: request)
+            } catch {
+                throw SpotifyError.network
+            }
+            switch (response as? HTTPURLResponse)?.statusCode {
+            case 200: return data
+            case 401 where attempt == 0: continue
+            case 429 where attempt == 0: try await Task.sleep(for: .seconds(2))
+            default: throw SpotifyError.network
+            }
+        }
+        throw SpotifyError.network
+    }
+
+    private struct ArtistSearchResponse: Decodable {
+        let data: DataField?
+        struct DataField: Decodable { let searchV2: Search? }
+        struct Search: Decodable { let artists: Artists? }
+        struct Artists: Decodable { let items: [Item]? }
+        struct Item: Decodable { let data: Artist? }
+        struct Artist: Decodable {
+            let uri: String?
+            let profile: Profile?
+            let visuals: Visuals?
+            let onPlatformReputationTrait: Reputation?
+        }
+        struct Profile: Decodable { let name: String? }
+        struct Visuals: Decodable { let avatarImage: Avatar? }
+        struct Avatar: Decodable { let sources: [Source]? }
+        struct Reputation: Decodable { let verification: Verification? }
+        struct Verification: Decodable { let isVerified: Bool? }
+    }
+
+    private struct DiscographyResponse: Decodable {
+        let data: DataField?
+        struct DataField: Decodable { let artistUnion: Artist? }
+        struct Artist: Decodable { let discography: Discography? }
+        struct Discography: Decodable { let all: Page? }
+        struct Page: Decodable {
+            let items: [Group]?
+            let totalCount: Int?
+        }
+        struct Group: Decodable { let releases: Releases? }
+        struct Releases: Decodable { let items: [Release]? }
+        struct Release: Decodable {
+            let uri: String?
+            let name: String?
+            let type: String?
+            let date: ReleaseDate?
+            let coverArt: Cover?
+        }
+        struct ReleaseDate: Decodable { let year: Int? }
+        struct Cover: Decodable { let sources: [Source]? }
+    }
+
+    fileprivate struct Source: Decodable {
+        let url: String?
+        let width: Int?
+    }
+}
+
+/// The web player's anonymous token, from an embed page, kept while it works.
+private actor SpotifyWebToken {
+    static let shared = SpotifyWebToken()
+    private var token: String?
+
+    func token(renewing: Bool) async throws -> String {
+        if let token, !renewing { return token }
+        // Any public embed carries one; this is Spotify's own top hits playlist.
+        var request = URLRequest(url: URL(string: "https://open.spotify.com/embed/playlist/37i9dQZF1DXcBWIGoYBM5M")!)
+        request.timeoutInterval = 20
+        guard let (data, response) = try? await URLSession.shared.data(for: request),
+              (response as? HTTPURLResponse)?.statusCode == 200,
+              let fresh = try? SpotifyService.decodeEmbedPayload(from: data).props?.pageProps?.state?.settings?.session?.accessToken else {
+            throw SpotifyError.network
+        }
+        token = fresh
+        return fresh
+    }
+}

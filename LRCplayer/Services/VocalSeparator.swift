@@ -1,5 +1,8 @@
 import Accelerate
 import AVFoundation
+#if targetEnvironment(macCatalyst)
+import CoreAudio
+#endif
 import AppleArchive
 import Combine
 import CoreML
@@ -288,7 +291,12 @@ final class SingAlong: ObservableObject {
         let url = song.isMediaLibraryItem ? song.fileURL : song.playableFileURL
         let id = song.id
         let models = models
+        let streamed = song.isRemote && !song.isDownloaded ? song : nil
         job = Task.detached(priority: .userInitiated) { [weak self] in
+            // A streamed song is downloaded first: separating reads the file.
+            if let streamed {
+                guard await SubsonicDownloads.shared.ensureLocal(streamed), !Task.isCancelled else { return }
+            }
             guard let track = await StageTrack.load(url), !Task.isCancelled else { return }
             // A song already separated doesn't wait for the model to load.
             if VocalsCache.load(id, into: track) { track.markAllReady() }

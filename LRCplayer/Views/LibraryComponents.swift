@@ -84,7 +84,9 @@ struct RouteLink<Label: View>: View {
     /// List rows get the disclosure chevron NavigationLink used to draw.
     var showsChevron = false
     @ViewBuilder let label: () -> Label
-    @EnvironmentObject private var router: AppRouter
+    /// The router unobserved: every link on screen redrew at each page
+    /// pushed or tab picked.
+    @Environment(\.appServicesStorage) private var services
     @Environment(\.opensRoutes) private var opensRoutes
     @Environment(\.routeOpener) private var routeOpener
 
@@ -100,7 +102,7 @@ struct RouteLink<Label: View>: View {
             if let routeOpener {
                 routeOpener(route)
             } else {
-                router.open(route)
+                services?.router.open(route)
             }
         } label: {
             if showsChevron {
@@ -127,14 +129,8 @@ struct LibraryDestinationView: View {
         switch route {
         case .playlists:
             PlaylistListView()
-        case .artists:
-            ArtistListView()
         case .albums:
             AlbumGridView()
-        case .songs:
-            SongsListView()
-        case .genres:
-            GenreListView()
         case let .album(id, _):
             AlbumDetailView(albumID: id)
         case let .artist(name):
@@ -308,18 +304,6 @@ struct PlayShuffleButtons: View {
     }
 }
 
-enum SongListSortMode: String, CaseIterable {
-    case title
-    case artist
-
-    var title: String {
-        switch self {
-        case .title: String(localized: "Title")
-        case .artist: String(localized: "Artist")
-        }
-    }
-}
-
 // MARK: - Song menus
 
 /// One definition of the song context menu (SwiftUI). UIKit tables use
@@ -355,11 +339,24 @@ struct SongContextMenu: View {
                     libraryVM.removeFromPlaylist(songId: song.id, playlistId: playlist.id)
                 }
             }
-            Button("Delete from Library", destructiveImage: "trash") {
-                libraryVM.deleteSong(song)
+            if song.isDownloaded {
+                Button("Remove Download", destructiveImage: "arrow.down.circle.dotted") {
+                    SubsonicDownloads.shared.removeDownloads([song])
+                }
+            }
+            // Server songs come back with the next sync: only their download goes.
+            if !song.isRemote {
+                Button("Delete from Library", destructiveImage: "trash") {
+                    libraryVM.deleteSong(song)
+                }
             }
         }
         Section {
+            if song.isRemote, !song.isDownloaded, !SubsonicDownloads.shared.isPending(song) {
+                Button("Download", systemImage: "arrow.down.circle") {
+                    SubsonicDownloads.shared.download([song])
+                }
+            }
             Button("Play Next", systemImage: "text.line.first.and.arrowtriangle.forward") {
                 playerVM.addNextToQueue(song: song)
             }
@@ -402,8 +399,10 @@ struct SongContextMenu: View {
             if let onInfo {
                 Button("Info", systemImage: "info.circle", action: onInfo)
             }
-            if !song.isMediaLibraryItem {
+            if !song.isMediaLibraryItem, !song.isRemote {
                 Button("Edit Info…", systemImage: "pencil") { libraryVM.songEditor = song }
+            }
+            if !song.isMediaLibraryItem, song.hasLocalAudio {
                 Button("Share Song…", systemImage: "square.and.arrow.up") { SongExporter.share(song) }
             }
             Button("Associate LRC…", systemImage: "text.quote") {
@@ -437,6 +436,18 @@ enum SongMenuBuilder {
         guard let libraryVM else { return UIMenu(children: queueActions) }
 
         var libraryActions: [UIMenuElement] = []
+        let downloads = SubsonicDownloads.shared
+        if song.isRemote, !song.isDownloaded {
+            if downloads.isPending(song) {
+                libraryActions.append(UIAction(title: String(localized: "Cancel Download"), image: UIImage(systemName: "xmark.circle")) { _ in
+                    downloads.cancel([song])
+                })
+            } else {
+                libraryActions.append(UIAction(title: String(localized: "Download"), image: UIImage(systemName: "arrow.down.circle")) { _ in
+                    downloads.download([song])
+                })
+            }
+        }
         let newPlaylist = UIAction(title: String(localized: "New Playlist…"), image: UIImage(systemName: "plus")) { [weak libraryVM] _ in
             libraryVM?.requestNewPlaylist(adding: song)
         }
@@ -462,10 +473,12 @@ enum SongMenuBuilder {
         }
 
         var lyricsActions: [UIMenuElement] = []
-        if !song.isMediaLibraryItem {
+        if !song.isMediaLibraryItem, !song.isRemote {
             lyricsActions.append(UIAction(title: String(localized: "Edit Info…"), image: UIImage(systemName: "pencil")) { [weak libraryVM] _ in
                 libraryVM?.songEditor = song
             })
+        }
+        if !song.isMediaLibraryItem, song.hasLocalAudio {
             lyricsActions.append(UIAction(title: String(localized: "Share Song…"), image: UIImage(systemName: "square.and.arrow.up")) { _ in
                 SongExporter.share(song)
             })
@@ -488,9 +501,17 @@ enum SongMenuBuilder {
                 libraryVM?.removeFromPlaylist(songId: song.id, playlistId: playlistContext)
             })
         }
-        destructive.append(UIAction(title: String(localized: "Delete from Library"), image: UIImage(systemName: "trash")?.withTintColor(.menuDestructive, renderingMode: .alwaysOriginal), attributes: .destructive) { [weak libraryVM] _ in
-            libraryVM?.deleteSong(song)
-        })
+        if song.isDownloaded {
+            destructive.append(UIAction(title: String(localized: "Remove Download"), image: UIImage(systemName: "arrow.down.circle.dotted")?.withTintColor(.menuDestructive, renderingMode: .alwaysOriginal), attributes: .destructive) { _ in
+                downloads.removeDownloads([song])
+            })
+        }
+        // Server songs come back with the next sync: only their download goes.
+        if !song.isRemote {
+            destructive.append(UIAction(title: String(localized: "Delete from Library"), image: UIImage(systemName: "trash")?.withTintColor(.menuDestructive, renderingMode: .alwaysOriginal), attributes: .destructive) { [weak libraryVM] _ in
+                libraryVM?.deleteSong(song)
+            })
+        }
 
         queueActions = [UIMenu(options: .displayInline, children: queueActions)]
         func tinted(_ elements: [UIMenuElement]) -> [UIMenuElement] {
@@ -511,6 +532,27 @@ enum SongMenuBuilder {
             UIMenu(options: .displayInline, children: libraryActions),
             UIMenu(options: .displayInline, children: lyricsActions)
         ])
+    }
+
+    /// Swiping a song left: what Settings › Home picked (Go to Album by
+    /// default). None where it would lead to the page already open.
+    static func swipeLeftAction(for song: Song, libraryVM: LibraryViewModel?, playerVM: PlayerViewModel?, router: AppRouter?, context: SongSwipeAction.Context) -> UIContextualAction? {
+        guard let target = SongSwipeAction.current.target(for: song, libraryVM: libraryVM, context: context) else { return nil }
+        let action = UIContextualAction(style: .normal, title: target.title) { [weak playerVM, weak router] _, _, completion in
+            completion(true)
+            // Once the row has closed.
+            DispatchQueue.main.async { target.perform(playerVM: playerVM, router: router) }
+        }
+        action.backgroundColor = target.color
+        action.image = UIImage(systemName: target.symbol)
+        return action
+    }
+
+    static func swipeLeftConfiguration(for song: Song, libraryVM: LibraryViewModel?, playerVM: PlayerViewModel?, router: AppRouter?, context: SongSwipeAction.Context) -> UISwipeActionsConfiguration {
+        let actions = [swipeLeftAction(for: song, libraryVM: libraryVM, playerVM: playerVM, router: router, context: context)].compactMap { $0 }
+        let configuration = UISwipeActionsConfiguration(actions: actions)
+        configuration.performsFirstActionWithFullSwipe = true
+        return configuration
     }
 
     /// Swiping a song right: a single "Add to Queue". Songs added this way
@@ -704,9 +746,10 @@ struct SongEditorView: View {
         dismiss()
     }
 
-    private static func squareJPEG(_ image: UIImage) -> Data? {
+    /// The image cropped to its centre square, as a JPEG of `maxSide` at most.
+    static func squareJPEG(_ image: UIImage, maxSide: CGFloat = 1200) -> Data? {
         let side = min(image.size.width, image.size.height)
-        let target = min(side, 1200)
+        let target = min(side, maxSide)
         let format = UIGraphicsImageRendererFormat.default()
         format.scale = 1
         let renderer = UIGraphicsImageRenderer(size: CGSize(width: target, height: target), format: format)
@@ -722,7 +765,9 @@ struct SongEditorView: View {
 /// the app measured from its audio. Opened from Search.
 struct SongInfoView: View {
     let song: Song
+    @EnvironmentObject private var libraryVM: LibraryViewModel
     @Environment(\.dismiss) private var dismiss
+    @State private var coverAlbum: Album?
     @State private var audio: AudioDetails?
     @State private var mix: AutoMixProfile?
     @State private var hasWordSync = false
@@ -752,6 +797,18 @@ struct SongInfoView: View {
                     .listRowBackground(Color.clear)
                     // Clear of the cell's rounded corners, which clipped the cover.
                     .listRowInsets(EdgeInsets(top: 12, leading: 20, bottom: 12, trailing: 20))
+                }
+
+                if let album = libraryVM.album(containing: song) {
+                    Section {
+                        Button(album.isSingle ? "Change Cover…" : "Change Album Cover…", systemImage: "photo.on.rectangle") {
+                            coverAlbum = album
+                        }
+                    } footer: {
+                        if album.songs.count > 1 {
+                            Text("For the \(album.songs.count) songs of “\(album.title)”.")
+                        }
+                    }
                 }
 
                 Section("Metadata") {
@@ -795,7 +852,7 @@ struct SongInfoView: View {
                     } header: {
                         Text("Lyrics Summary")
                     } footer: {
-                        Text("Written by Mistral from the lyrics, for the assistant. Edit it if it's wrong; empty it to remove it.")
+                        Text("Written by \(AIProvider.current.name) from the lyrics, for the assistant. Edit it if it's wrong; empty it to remove it.")
                     }
                 }
 
@@ -835,6 +892,7 @@ struct SongInfoView: View {
             }
             .navigationTitle("Info")
             .navigationBarTitleDisplayMode(.inline)
+            .sheet(item: $coverAlbum) { album in AlbumCoverPicker(album: album) }
             .onAppear {
                 if let text = LyricsSummaries.shared.summary(for: song.id) {
                     summary = text
@@ -919,4 +977,87 @@ func fixedContextMenu(identifier: NSCopying?, previewProvider: UIContextMenuCont
     let configuration = UIContextMenuConfiguration(identifier: identifier, previewProvider: previewProvider, actionProvider: actionProvider)
     configuration.preferredMenuElementOrder = .fixed
     return configuration
+}
+
+
+/// What swiping a song left does, picked in Settings › Home.
+enum SongSwipeAction: String, CaseIterable, Identifiable {
+    case none, goToAlbum, goToArtist, playLast
+
+    static let storageKey = "songSwipeLeftAction"
+
+    static var current: SongSwipeAction {
+        SongSwipeAction(rawValue: UserDefaults.standard.string(forKey: storageKey) ?? "") ?? .goToAlbum
+    }
+
+    /// The page the list is on: no swipe to it.
+    enum Context { case list, album, artist }
+
+    var id: Self { self }
+
+    var title: String {
+        switch self {
+        case .none: String(localized: "None")
+        case .goToAlbum: String(localized: "Go to Album")
+        case .goToArtist: String(localized: "Go to Artist")
+        case .playLast: String(localized: "Play Last")
+        }
+    }
+
+    var symbol: String {
+        switch self {
+        case .none: "nosign"
+        case .goToAlbum: "square.stack"
+        case .goToArtist: "music.microphone"
+        case .playLast: "text.line.last.and.arrowtriangle.forward"
+        }
+    }
+
+    struct Target {
+        let title: String
+        let symbol: String
+        let color: UIColor
+        let perform: @MainActor (PlayerViewModel?, AppRouter?) -> Void
+
+        @MainActor func perform(playerVM: PlayerViewModel?, router: AppRouter?) { perform(playerVM, router) }
+    }
+
+    @MainActor
+    func target(for song: Song, libraryVM: LibraryViewModel?, context: Context) -> Target? {
+        switch self {
+        case .none:
+            return nil
+        case .goToAlbum:
+            guard context != .album, let album = libraryVM?.album(containing: song), !album.isSingle else { return nil }
+            let id = album.id
+            return Target(title: title, symbol: symbol, color: .systemIndigo) { _, router in router?.open(.album(id)) }
+        case .goToArtist:
+            guard context != .artist, let artist = libraryVM?.artist(for: song) else { return nil }
+            let name = artist.name
+            return Target(title: title, symbol: symbol, color: .systemIndigo) { _, router in router?.open(.artist(name)) }
+        case .playLast:
+            return Target(title: title, symbol: symbol, color: .systemOrange) { playerVM, _ in playerVM?.addToQueue(song: song) }
+        }
+    }
+}
+
+/// The SwiftUI lists' left swipe (the same as the tables').
+struct SwipeLeftButtons: View {
+    let song: Song
+    var context: SongSwipeAction.Context = .list
+    @EnvironmentObject private var libraryVM: LibraryViewModel
+    @EnvironmentObject private var playerVM: PlayerViewModel
+    @EnvironmentObject private var router: AppRouter
+    @AppStorage(SongSwipeAction.storageKey) private var raw = SongSwipeAction.goToAlbum.rawValue
+
+    var body: some View {
+        if let target = (SongSwipeAction(rawValue: raw) ?? .goToAlbum).target(for: song, libraryVM: libraryVM, context: context) {
+            Button {
+                DispatchQueue.main.async { target.perform(playerVM: playerVM, router: router) }
+            } label: {
+                Label(target.title, systemImage: target.symbol)
+            }
+            .tint(Color(uiColor: target.color))
+        }
+    }
 }

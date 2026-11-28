@@ -20,5 +20,7 @@ final class AppModel {
         libraryVM = LibraryViewModel(libraryService: libraryService)
         playerVM = PlayerViewModel(playerService: playerService, libraryService: libraryService)
         importService = FileImportService(libraryService: libraryService)
+        SubsonicService.shared.start(with: libraryService)
+        CloudSync.shared.start(library: libraryService)
     }
 }

@@ -3,20 +3,20 @@ import SwiftUI
 enum AppTab: String, CaseIterable, Identifiable, Hashable {
     case library
     case playlists
-    case artists
     case albums
-    case songs
-    case genres
     case assistant
     case games
     case stats
     case search
+    /// The Mac only: Settings in a page of their own, opened from the
+    /// bottom of the sidebar.
+    case settings
 
     var id: String { rawValue }
 
-    /// Tabs the user can add next to Library in Settings. Artists and
-    /// Genres live in Search instead.
-    static let optional: [AppTab] = [.playlists, .albums, .songs, .assistant, .games, .stats]
+    /// Tabs the user can add next to Library in Settings. Songs, artists
+    /// and genres live in Search.
+    static let optional: [AppTab] = [.playlists, .albums, .assistant, .games, .stats]
     /// Library + 3 + Search: the most an iPhone tab bar shows without "More".
     static let maxOptionalTabs = 3
 
@@ -24,14 +24,12 @@ enum AppTab: String, CaseIterable, Identifiable, Hashable {
         switch self {
         case .library: String(localized: "Library")
         case .playlists: String(localized: "Playlists")
-        case .artists: String(localized: "Artists")
         case .albums: String(localized: "Albums")
-        case .songs: String(localized: "Songs")
-        case .genres: String(localized: "Genres")
         case .assistant: String(localized: "Assistant")
         case .games: String(localized: "Games")
         case .stats: String(localized: "Stats")
         case .search: String(localized: "Search")
+        case .settings: String(localized: "Settings")
         }
     }
 
@@ -39,35 +37,27 @@ enum AppTab: String, CaseIterable, Identifiable, Hashable {
         switch self {
         case .library: "music.note.square.stack.fill"
         case .playlists: "music.note.list"
-        case .artists: "music.microphone"
         case .albums: "square.stack.fill"
-        case .songs: "music.note"
-        case .genres: "guitars.fill"
         case .assistant: "sparkles"
         case .games: "arcade.stick"
         case .stats: "chart.bar.xaxis"
         case .search: "magnifyingglass"
+        case .settings: "gearshape"
         }
     }
 
     var rootRoute: LibraryRoute? {
         switch self {
         case .playlists: .playlists
-        case .artists: .artists
         case .albums: .albums
-        case .songs: .songs
-        case .genres: .genres
-        case .library, .assistant, .games, .stats, .search: nil
+        case .library, .assistant, .games, .stats, .search, .settings: nil
         }
     }
 }
 
 enum LibraryRoute: Hashable {
     case playlists
-    case artists
     case albums
-    case songs
-    case genres
     /// `zoomSource` names the tile the page zooms out of, when there is one.
     case album(AlbumID, zoomSource: String? = nil)
     case artist(String)
@@ -99,13 +89,20 @@ final class AppRouter: ObservableObject {
     @Published private(set) var optionalTabs: [AppTab]
 
     @Published var showSettings = false
+    /// The sidebar is up (the Mac, an iPad that asked for it): Settings
+    /// are their own page, and Stats and Games rows of it, not tiles.
+    @Published var usesSidebar = MacApp.isActive
     /// The assistant's sheet, in the mode it opens in.
     @Published var assistant: AssistantMode?
 
     /// Slides Settings in, on one of its pages if given.
     func openSettings(at destination: SettingsDestination? = nil) {
         settingsDestination = destination
-        showSettings = true
+        if usesSidebar {
+            selectedTab = .settings
+        } else {
+            showSettings = true
+        }
     }
     /// Starts a game from Settings (set by the root view, which owns the
     /// full-screen game covers).
@@ -124,19 +121,28 @@ final class AppRouter: ObservableObject {
 
     init() {
         Self.applyLayoutDefaults()
-        optionalTabs = Self.stored(Self.tabsKey, default: [.playlists, .albums], allowed: AppTab.optional)
+        optionalTabs = Self.stored(Self.tabsKey, default: Self.defaultOptionalTabs, allowed: AppTab.optional)
     }
 
-    private static let layoutDefaultsKey = "layoutDefaultsV2Applied"
+    private static let layoutDefaultsKey = "layoutDefaultsV3Applied"
+    static let defaultOptionalTabs: [AppTab] = [.playlists, .assistant, .albums]
 
-    /// Puts everyone on the new layout once, on update: Playlists and Albums
-    /// tabs.
-    /// Any change made after that sticks.
+    /// Puts everyone on the new layout once, on update: Playlists, Assistant
+    /// and Albums tabs, and the assistant out of Home's toolbar (it has its
+    /// tab now). Any change made after that sticks.
     private static func applyLayoutDefaults() {
         let defaults = UserDefaults.standard
         guard !defaults.bool(forKey: layoutDefaultsKey) else { return }
         defaults.set(true, forKey: layoutDefaultsKey)
-        defaults.set([AppTab.playlists, .albums].map(\.rawValue).joined(separator: ","), forKey: tabsKey)
+        defaults.set(defaultOptionalTabs.map(\.rawValue).joined(separator: ","), forKey: tabsKey)
+        let slots = [HomeShortcut.leadingKey, HomeShortcut.leading2Key, HomeShortcut.leading3Key, HomeShortcut.trailingKey]
+        for key in slots where defaults.string(forKey: key) == HomeShortcut.assistant.rawValue {
+            defaults.set(HomeShortcut.none.rawValue, forKey: key)
+        }
+        // Never set: it would have defaulted to the assistant.
+        if defaults.string(forKey: HomeShortcut.trailingKey) == nil {
+            defaults.set(HomeShortcut.none.rawValue, forKey: HomeShortcut.trailingKey)
+        }
     }
 
     private static func stored(_ key: String, default defaultTabs: [AppTab], allowed: [AppTab]) -> [AppTab] {

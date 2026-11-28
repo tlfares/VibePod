@@ -24,6 +24,8 @@ final class MiniPlayerGeometry {
 final class NowPlayingMorph: ObservableObject {
     static let shared = NowPlayingMorph()
     @Published private(set) var coversMiniPlayer = false
+    /// The iPad's floating mini player hides its glass like the accessory's.
+    @Published private(set) var hidesFloatingGlass = false
     /// Grabs a closing card back (the app already considers it closed).
     var reopen: (() -> Bool)?
 
@@ -37,7 +39,10 @@ final class NowPlayingMorph: ObservableObject {
         // frame barely frosted, and UIKit lets touches through anything at
         // 1% or less (a tap meant to grab the card back hit the page below).
         // At 2%, under the card, it can't be seen.
-        if covers { MiniPlayerGeometry.shared.accessoryContainer?.alpha = 0.02 }
+        if covers {
+            MiniPlayerGeometry.shared.accessoryContainer?.alpha = 0.02
+            if !hidesFloatingGlass { hidesFloatingGlass = true }
+        }
         guard coversMiniPlayer != covers else { return }
         if animated {
             withAnimation(.easeInOut(duration: 0.3)) { coversMiniPlayer = covers }
@@ -48,6 +53,7 @@ final class NowPlayingMorph: ObservableObject {
 
     func showAccessory() {
         MiniPlayerGeometry.shared.accessoryContainer?.alpha = 1
+        if hidesFloatingGlass { hidesFloatingGlass = false }
     }
 }
 
@@ -211,6 +217,13 @@ final class NowPlayingCardController: UIViewController, UIGestureRecognizerDeleg
     private var phaseToken = UUID()
     private weak var scrollViewUnderTouch: UIScrollView?
     private lazy var pan = UIPanGestureRecognizer(target: self, action: #selector(handlePan(_:)))
+    /// Two fingers on a trackpad (a Mac, an iPad) pull the card down like a drag does.
+    private lazy var scrollPan: UIPanGestureRecognizer = {
+        let pan = UIPanGestureRecognizer(target: self, action: #selector(handlePan(_:)))
+        pan.allowedScrollTypesMask = .continuous
+        pan.allowedTouchTypes = []
+        return pan
+    }()
     private var overlayWindow: NowPlayingWindow?
     private weak var appWindow: UIWindow?
 
@@ -320,6 +333,9 @@ final class NowPlayingCardController: UIViewController, UIGestureRecognizerDeleg
 
         pan.delegate = self
         view.addGestureRecognizer(pan)
+        // A trackpad's two fingers: the Mac's, an iPad's keyboard.
+        scrollPan.delegate = self
+        view.addGestureRecognizer(scrollPan)
     }
 
     override func viewDidLayoutSubviews() {
@@ -375,7 +391,8 @@ final class NowPlayingCardController: UIViewController, UIGestureRecognizerDeleg
         // out of it turning sideways, and melts into it turning back.
         let videoUpright = MotionArtworkState.shared.videoHidesCover
         let toUpright = size.height > size.width
-        if flies, videoUpright, !toUpright { heroContainer.alpha = 0 }
+        // A flying video stays itself all the way.
+        if flies, videoUpright, !toUpright, heroVideo == nil { heroContainer.alpha = 0 }
 
         coordinator.animate(alongsideTransition: { _ in
             self.restFullScreen()
@@ -383,15 +400,22 @@ final class NowPlayingCardController: UIViewController, UIGestureRecognizerDeleg
             self.hosting.view.layoutIfNeeded()
             still.alpha = 0
             guard flies else { return }
-            if videoUpright { self.heroContainer.alpha = toUpright ? 0 : 1 }
+            if videoUpright, self.heroVideo == nil { self.heroContainer.alpha = toUpright ? 0 : 1 }
             if let target = self.measureCoverTarget() ?? self.restingTargets[self.restingKey] {
                 // The new cover was just built: it stays hidden under the flight.
                 PlayerModeTransitionAnchors.nowPlaying.setArtworkViewsHidden(true)
                 self.heroContainer.frame = self.hosting.view.convert(target.frame, to: self.view)
                 self.heroView.layer.cornerRadius = target.cornerRadius
                 self.setHeroFade(size: target.frame.size, fades: target.fades)
+                // The video turns with this very animation (chasing the
+                // flying cover, it lagged a frame behind).
+                // Like the flying cover: from where it's seen, no shift.
+                if let heroVideo = self.heroVideo {
+                    MusicVideoPlayer.shared.turnAlong(to: heroVideo, shift: .zero)
+                }
             }
         }, completion: { _ in
+            MusicVideoPlayer.shared.endTurnAlong()
             still.removeFromSuperview()
             guard flies else {
                 FullscreenCoverPager.Controller.hidesPages = false
@@ -610,13 +634,16 @@ final class NowPlayingCardController: UIViewController, UIGestureRecognizerDeleg
     }
 
     private func finishHero() {
+        // The real covers back first: the video, handed back to one of
+        // them, finds it shown and lies over it at once (else the cover
+        // shows a frame or two).
+        PlayerModeTransitionAnchors.nowPlaying.setArtworkViewsHidden(false)
         heroVideo?.removeFromSuperview()
         heroVideo = nil
         heroView.isHidden = false
         heroContainer.isHidden = true
         heroContainer.layer.removeAllAnimations()
         heroView.mask = nil
-        PlayerModeTransitionAnchors.nowPlaying.setArtworkViewsHidden(false)
     }
 
     /// The cover's shadow in each place it sits, so it travels with the
@@ -1059,8 +1086,14 @@ final class NowPlayingCardController: UIViewController, UIGestureRecognizerDeleg
 
     func gestureRecognizer(_ gestureRecognizer: UIGestureRecognizer, shouldReceive touch: UITouch) -> Bool {
         guard phase == .shown || phase == .dragging || phase == .expanding, presentedViewController == nil else { return false }
+        return findScrollView(from: touch.view)
+    }
+
+    /// Notes the scrollable content under the finger (or pointer); false
+    /// over a slider, which keeps its own drags.
+    private func findScrollView(from hitView: UIView?) -> Bool {
         scrollViewUnderTouch = nil
-        var view = touch.view
+        var view = hitView
         while let current = view, current !== self.view {
             if current is UISlider { return false }
             if let scrollView = current as? UIScrollView, scrollViewUnderTouch == nil,
@@ -1073,7 +1106,12 @@ final class NowPlayingCardController: UIViewController, UIGestureRecognizerDeleg
     }
 
     func gestureRecognizerShouldBegin(_ gestureRecognizer: UIGestureRecognizer) -> Bool {
-        guard gestureRecognizer === pan else { return true }
+        guard let pan = gestureRecognizer as? UIPanGestureRecognizer, pan === self.pan || pan === scrollPan else { return true }
+        if pan === scrollPan {
+            // Scrolls carry no touch: check the card and what's under the pointer here.
+            guard phase == .shown || phase == .dragging || phase == .expanding, presentedViewController == nil,
+                  findScrollView(from: view.hitTest(pan.location(in: view), with: nil)) else { return false }
+        }
         let velocity = pan.velocity(in: view)
         guard velocity.y > 0, velocity.y > abs(velocity.x) * 1.2 else { return false }
         if let scrollView = scrollViewUnderTouch,

@@ -57,8 +57,8 @@ final class LRCLIBResultsViewController: UITableViewController {
             String(localized: "Best matches first, then word by word, duet and synced lyrics. Tap a result to preview and import it.")
         case .generate:
             aiAvailable
-                ? String(localized: "Mistral AI transcribes the vocals and syncs them to the song. The song's audio is sent to Mistral; you can delete the result anytime.")
-                : String(localized: "Turn on AI Features in Settings › Tools to have Mistral AI transcribe and sync this song's lyrics.")
+                ? String(localized: "\(AIProvider.current.name) transcribes the vocals and syncs them to the song. The song's audio is sent to \(AIProvider.current.name); you can delete the result anytime.")
+                : String(localized: "Turn on AI Features in Settings › Tools to have \(AIProvider.current.name) transcribe and sync this song's lyrics.")
         default:
             nil
         }
@@ -71,7 +71,7 @@ final class LRCLIBResultsViewController: UITableViewController {
 
         if indexPath.section == Section.generate.rawValue {
             var config = cell.defaultContentConfiguration()
-            config.text = String(localized: "Generate with Mistral AI")
+            config.text = String(localized: "Generate with \(AIProvider.current.name)")
             config.textProperties.color = aiAvailable ? tint : .tertiaryLabel
             config.image = UIImage(systemName: "sparkles")
             config.imageProperties.tintColor = aiAvailable ? tint : .tertiaryLabel
@@ -108,6 +108,23 @@ final class LRCLIBResultsViewController: UITableViewController {
 
         cell.contentConfiguration = config
         return cell
+    }
+
+    /// Held with Speechmatics on: its model, kept for the next ones.
+    /// Picking one generates with it.
+    override func tableView(_ tableView: UITableView, contextMenuConfigurationForRowAt indexPath: IndexPath, point: CGPoint) -> UIContextMenuConfiguration? {
+        guard indexPath.section == Section.generate.rawValue, aiAvailable, Speechmatics.isOn else { return nil }
+        return UIContextMenuConfiguration(identifier: nil, previewProvider: nil) { [weak self] _ in
+            let actions = Speechmatics.OperatingPoint.allCases.map { model in
+                UIAction(title: model.title, state: model == Speechmatics.operatingPoint ? .on : .off) { _ in
+                    Speechmatics.operatingPoint = model
+                    guard let self else { return }
+                    let onGenerate = self.onGenerate
+                    self.dismiss(animated: true) { onGenerate() }
+                }
+            }
+            return UIMenu(title: String(localized: "Speechmatics Model"), options: .displayInline, children: actions)
+        }
     }
 
     override func tableView(_ tableView: UITableView, didSelectRowAt indexPath: IndexPath) {
@@ -178,7 +195,7 @@ final class LRCLIBPreviewViewController: UIViewController {
     override func viewDidLoad() {
         super.viewDidLoad()
         title = String(localized: "Preview")
-        view.backgroundColor = .systemBackground
+        view.backgroundColor = .pageBackground
         navigationItem.leftBarButtonItem = UIBarButtonItem(barButtonSystemItem: .cancel, target: self, action: #selector(cancelTapped))
 
         let importBtn = UIBarButtonItem(title: String(localized: "Import"), style: .prominent, target: self, action: #selector(importTapped))

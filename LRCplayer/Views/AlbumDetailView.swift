@@ -52,7 +52,9 @@ final class AlbumDetailViewController: UITableViewController, SplitCollectionPag
     private var activeHeader: UIView { isFullScreen ? fullScreenHeader : headerView }
     private let footerLabel = UILabel()
     private var album: Album?
-    private var accentColor = UIColor.black
+    private(set) var accentColor = UIColor.black {
+        didSet { applyPageColor() }
+    }
     private var renderedToken: Int?
     private var cancellables = Set<AnyCancellable>()
     /// Album artist differs per track (compilations): show each track's artist.
@@ -70,6 +72,7 @@ final class AlbumDetailViewController: UITableViewController, SplitCollectionPag
         fullScreenHeader.removeFromSuperview()
         fullScreenHeader.stretch = 0
         tableView.topEdgeEffect.isHidden = false
+        applyPageColor()
         sizeHeaderAndFooter(force: true)
         if !split, isFullScreen { fullScreenHeader.followScroll(of: tableView) }
     }
@@ -173,8 +176,6 @@ final class AlbumDetailViewController: UITableViewController, SplitCollectionPag
         self.album = album
 
         accentColor = Song.albumBackgroundUIColor(for: album.artworkSource)
-        view.backgroundColor = accentColor
-        tableView.backgroundColor = accentColor
         showsTrackArtists = Set(album.songs.map(\.artist)).count > 1
         configureHeader()
         footerLabel.text = Self.footerText(for: album)
@@ -269,6 +270,19 @@ final class AlbumDetailViewController: UITableViewController, SplitCollectionPag
             lyricsBadge: LyricsBadge.image(for: song.lyricsKind),
             backgroundColor: accentColor
         )
+        cell.backgroundColor = rowColor
+    }
+
+    /// Split, the list starts on the artwork's blurred side: it lets it show
+    /// through, and the split controller paints the page color behind.
+    private var rowColor: UIColor { isSplit ? .clear : accentColor }
+
+    private func applyPageColor() {
+        guard isViewLoaded else { return }
+        view.backgroundColor = rowColor
+        tableView.backgroundColor = rowColor
+        for cell in tableView.visibleCells { cell.backgroundColor = rowColor }
+        if isSplit { parent?.view.backgroundColor = accentColor }
     }
 
     override func tableView(_ tableView: UITableView, numberOfRowsInSection section: Int) -> Int {
@@ -292,7 +306,8 @@ final class AlbumDetailViewController: UITableViewController, SplitCollectionPag
     }
 
     override func tableView(_ tableView: UITableView, trailingSwipeActionsConfigurationForRowAt indexPath: IndexPath) -> UISwipeActionsConfiguration? {
-        UISwipeActionsConfiguration(actions: [])
+        guard let song = album?.songs[safe: indexPath.row] else { return nil }
+        return SongMenuBuilder.swipeLeftConfiguration(for: song, libraryVM: libraryVM, playerVM: playerVM, router: router, context: .album)
     }
 
     override func tableView(_ tableView: UITableView, contextMenuConfigurationForRowAt indexPath: IndexPath, point: CGPoint) -> UIContextMenuConfiguration? {
@@ -477,6 +492,7 @@ final class AlbumSongTableCell: UITableViewCell {
     private let artistLabel = UILabel()
     private let durationLabel = UILabel()
     private let lyricsBadgeView = UIImageView()
+    private let downloadBadge = DownloadBadgeView(tint: UIColor.white.withAlphaComponent(0.35))
     private let nowPlayingView = UIImageView()
 
     override init(style: UITableViewCell.CellStyle, reuseIdentifier: String?) {
@@ -507,7 +523,7 @@ final class AlbumSongTableCell: UITableViewCell {
         textStack.axis = .vertical
         textStack.spacing = 1
 
-        let trailing = UIStackView(arrangedSubviews: [lyricsBadgeView, durationLabel])
+        let trailing = UIStackView(arrangedSubviews: [downloadBadge, lyricsBadgeView, durationLabel])
         trailing.axis = .horizontal
         trailing.spacing = 8
         trailing.alignment = .center
@@ -565,6 +581,7 @@ final class AlbumSongTableCell: UITableViewCell {
         durationLabel.text = song.formattedDuration
         lyricsBadgeView.image = lyricsBadge
         lyricsBadgeView.isHidden = lyricsBadge == nil
+        downloadBadge.configure(song: song)
         NowPlayingIndicator.apply(to: nowPlayingView, isCurrent: isCurrent, isPlaying: isPlaying, tint: UIColor.contentTint(from: backgroundColor))
     }
 }
@@ -612,22 +629,25 @@ enum CollectionHeaderStyle {
         (column * 0.8).rounded()
     }
 
-    /// The header column's width and its artwork's height on a split page:
-    /// the artwork as large as the page allows with the title and buttons
-    /// still above the bottom bars; when even the narrowest column can't
-    /// keep it square, it becomes a banner over its blurred sides.
-    /// `rest(width)` is what the header needs under its artwork.
-    static func splitColumn(in size: CGSize, safeArea: UIEdgeInsets, rest: (CGFloat) -> CGFloat) -> (width: CGFloat, artworkHeight: CGFloat) {
-        let minimum: CGFloat = 320
+    /// The header column of a split page: the artwork square against the
+    /// leading edge, then its right edge mirrored and blurred, carried on as
+    /// far as its bottom edge is below it, so both melt into the page alike.
+    /// The artwork is as large as the page allows with the title and buttons
+    /// still above the bottom bars. `rest(side)` is what the header needs
+    /// under an artwork of that side.
+    static func splitColumn(in size: CGSize, safeArea: UIEdgeInsets, rest: (CGFloat) -> CGFloat) -> (width: CGFloat, artworkHeight: CGFloat, sideExtension: CGFloat) {
+        let minimum: CGFloat = 200
         let available = size.height - safeArea.bottom
-        var width = min(max((size.width * 0.44).rounded(), minimum), 560)
-        // Twice: a narrower column can wrap the title on one more line.
-        for _ in 0..<2 {
-            let fits = (available - rest(width)).rounded(.down)
-            guard fits < width else { break }
-            width = max(fits, minimum)
+        let maxWidth = min(max((size.width * 0.55).rounded(), 400), 820)
+        var side = (maxWidth * 0.75).rounded()
+        var sideExtension: CGFloat = 0
+        // A few times: a narrower artwork can wrap the title on one more line.
+        for _ in 0..<3 {
+            let below = rest(side)
+            sideExtension = max(below - FullScreenArtworkHeaderView.buttonsCenterFromBottom, 0).rounded()
+            side = max(min((available - below).rounded(.down), maxWidth - sideExtension), minimum)
         }
-        return (width, min(width, max((available - rest(width)).rounded(.down), 180)))
+        return (side + sideExtension, side, sideExtension)
     }
 }
 
@@ -643,6 +663,8 @@ struct CollectionHeaderSizeKey: Equatable {
 @MainActor protocol SplitCollectionPage: UITableViewController {
     /// The header that leaves the list for its own column.
     var splitHeader: FullScreenArtworkHeaderView { get }
+    /// The page color, painted behind the split page's clear list.
+    var accentColor: UIColor { get }
     /// Split: the page gives up its header (keeping only what belongs to the
     /// list, like a filter row). Not split: it takes it back on top.
     func setSplit(_ split: Bool)
@@ -654,9 +676,6 @@ struct CollectionHeaderSizeKey: Equatable {
 final class CollectionSplitController<Page: SplitCollectionPage>: UIViewController {
     let page: Page
     private var isSplit = false
-    /// The column's right edge melts into the page, artwork included.
-    private let edgeFade = CAGradientLayer()
-    private var edgeFadeColor: UIColor?
 
     init(page: Page) {
         self.page = page
@@ -671,24 +690,31 @@ final class CollectionSplitController<Page: SplitCollectionPage>: UIViewControll
         addChild(page)
         view.addSubview(page.view)
         page.didMove(toParent: self)
-        edgeFade.startPoint = CGPoint(x: 0, y: 0.5)
-        edgeFade.endPoint = CGPoint(x: 1, y: 0.5)
-        edgeFade.isHidden = true
-        view.layer.addSublayer(edgeFade)
+    }
+
+    override func viewSafeAreaInsetsDidChange() {
+        super.viewSafeAreaInsetsDidChange()
+        // The sidebar shown or hidden.
+        view.setNeedsLayout()
     }
 
     override func viewDidLayoutSubviews() {
         super.viewDidLayoutSubviews()
         let bounds = view.bounds
         guard bounds.width > 0 else { return }
-        view.backgroundColor = page.view.backgroundColor
-        let split = CollectionHeaderStyle.isSplit(in: bounds.size)
+        view.backgroundColor = page.accentColor
+        // The iPad's sidebar floats over the leading edge: the page lays
+        // out in the room beside it.
+        let leading = view.safeAreaInsets.left
+        let room = CGSize(width: bounds.width - leading, height: bounds.height)
+        let split = CollectionHeaderStyle.isSplit(in: room)
         if split != isSplit {
             isSplit = split
             page.setSplit(split)
         }
+        page.splitHeader.scrollTarget = split ? page.tableView : nil
         guard split else {
-            edgeFade.isHidden = true
+            page.splitHeader.sideExtension = 0
             if page.view.frame != bounds { page.view.frame = bounds }
             return
         }
@@ -707,33 +733,21 @@ final class CollectionSplitController<Page: SplitCollectionPage>: UIViewControll
                 verticalFittingPriority: .fittingSizeLevel
             ).height
         }
-        let column = CollectionHeaderStyle.splitColumn(in: bounds.size, safeArea: safeArea) { width in
+        let column = CollectionHeaderStyle.splitColumn(in: room, safeArea: safeArea) { side in
             // The header's height minus its artwork's part below the bars.
-            header.artworkHeight = width
-            return fittingHeight(width) - (width - safeArea.top)
+            // The text follows the artwork's width, not the column's.
+            header.artworkHeight = side
+            header.sideExtension = max(header.sideExtension, 1)
+            return fittingHeight(side + 1) - (side - safeArea.top)
         }
         header.artworkHeight = column.artworkHeight
-        let headerFrame = CGRect(x: 0, y: safeArea.top, width: column.width, height: fittingHeight(column.width))
+        header.sideExtension = column.sideExtension
+        let headerFrame = CGRect(x: leading, y: safeArea.top, width: column.width, height: fittingHeight(column.width))
         if header.frame != headerFrame { header.frame = headerFrame }
-        let pageFrame = CGRect(x: column.width, y: 0, width: bounds.width - column.width, height: bounds.height)
+        // The songs start at the artwork's edge, over its blurred side.
+        let listStart = leading + column.artworkHeight
+        let pageFrame = CGRect(x: listStart, y: 0, width: bounds.width - listStart, height: bounds.height)
         if page.view.frame != pageFrame { page.view.frame = pageFrame }
-
-        CATransaction.begin()
-        CATransaction.setDisableActions(true)
-        let color = page.view.backgroundColor ?? .black
-        if color != edgeFadeColor {
-            edgeFadeColor = color
-            // Eased stops, like the header's fade: a linear one shows a band.
-            let stops: [(location: NSNumber, alpha: CGFloat)] = [(0, 0), (0.2, 0.1), (0.4, 0.3), (0.6, 0.58), (0.8, 0.84), (1, 1)]
-            edgeFade.colors = stops.map { color.withAlphaComponent($0.alpha).cgColor }
-            edgeFade.locations = stops.map(\.location)
-        }
-        let reach: CGFloat = 72
-        edgeFade.frame = CGRect(x: column.width - reach, y: 0, width: reach, height: bounds.height)
-        edgeFade.isHidden = false
-        // Above the header, under the list.
-        view.layer.insertSublayer(edgeFade, below: page.view.layer)
-        CATransaction.commit()
     }
 }
 
@@ -743,6 +757,15 @@ final class CollectionSplitController<Page: SplitCollectionPage>: UIViewControll
 /// and Play / Shuffle sit on that extension. Pulling down stretches the
 /// artwork.
 final class FullScreenArtworkHeaderView: UIView {
+    /// In its own column: a scroll over it (the trackpad, a wheel) scrolls
+    /// the songs beside it.
+    weak var scrollTarget: UIScrollView?
+
+    override func hitTest(_ point: CGPoint, with event: UIEvent?) -> UIView? {
+        if let scrollTarget, event?.type == .scroll, self.point(inside: point, with: event) { return scrollTarget }
+        return super.hitTest(point, with: event)
+    }
+
     var onPlay: (() -> Void)?
     var onShuffle: (() -> Void)?
     var onSubtitle: (() -> Void)?
@@ -777,8 +800,28 @@ final class FullScreenArtworkHeaderView: UIView {
     private let extensionView = UIImageView()
     private let extensionMask = CAGradientLayer()
     private let fade = CAGradientLayer()
+    /// A split page's right side: the artwork square against the leading
+    /// edge, its right edge mirrored and blurred over `sideExtension` points
+    /// (as far as the extension goes below it), and the same fade turned
+    /// sideways. The title and buttons center under the artwork.
+    private let sideFade = CAGradientLayer()
+    private let artworkTrailingMask = CAGradientLayer()
+    var sideExtension: CGFloat = 0 {
+        didSet {
+            guard sideExtension != oldValue else { return }
+            if (sideExtension > 0) != (oldValue > 0) { updateSideMode() }
+            setNeedsLayout()
+        }
+    }
+    /// From the header's bottom to its buttons' middle, where the extension
+    /// below the artwork ends.
+    static let buttonsCenterFromBottom: CGFloat = 44
+    private var pageCentered: [NSLayoutConstraint] = []
+    private var artworkCentered: [NSLayoutConstraint] = []
     /// How much of the artwork, from its bottom, the page color rises into.
-    private static let fadeRise: CGFloat = 0.45
+    static let fadeRise: CGFloat = 0.45
+    /// Eased stops (location, opacity): a linear fade shows a visible band.
+    static let fadeStops: [(location: NSNumber, alpha: CGFloat)] = [(0, 0), (0.14, 0.08), (0.28, 0.22), (0.42, 0.42), (0.58, 0.64), (0.76, 0.85), (1, 1)]
     private let titleLabel = UILabel()
     private let subtitleButton = UIButton(type: .system)
     private let detailLabel = UILabel()
@@ -793,6 +836,7 @@ final class FullScreenArtworkHeaderView: UIView {
     private var extensionTask: Task<Void, Never>?
     private var renderedExtensionSize: CGSize = .zero
     private var renderedArtworkHeight: CGFloat = 0
+    private var renderedSideMode = false
 
     override init(frame: CGRect) {
         super.init(frame: frame)
@@ -814,6 +858,11 @@ final class FullScreenArtworkHeaderView: UIView {
         let reach: CGFloat = 0.06
         artworkEdgeMask.colors = (edge + edge.reversed()).map { UIColor.black.withAlphaComponent($0.1).cgColor }
         artworkEdgeMask.locations = (edge.map { $0.0 * reach } + edge.reversed().map { 1 - $0.0 * reach }).map { NSNumber(value: Double($0)) }
+
+        // Linear, like the extension below fading in over the artwork.
+        artworkTrailingMask.startPoint = CGPoint(x: 0, y: 0.5)
+        artworkTrailingMask.endPoint = CGPoint(x: 1, y: 0.5)
+        artworkTrailingMask.colors = [UIColor.black.cgColor, UIColor.black.cgColor, UIColor.clear.cgColor]
 
         artworkView.contentMode = .scaleAspectFill
         artworkView.clipsToBounds = true
@@ -837,6 +886,10 @@ final class FullScreenArtworkHeaderView: UIView {
         // One fade for both: it rises over the artwork's lower part and
         // carries on over the extension, under the text.
         layer.insertSublayer(fade, above: extensionView.layer)
+        sideFade.startPoint = CGPoint(x: 0, y: 0.5)
+        sideFade.endPoint = CGPoint(x: 1, y: 0.5)
+        sideFade.isHidden = true
+        layer.insertSublayer(sideFade, above: fade)
 
         titleLabel.font = UIFont.preferredFont(forTextStyle: .title1).withWeight(.bold)
         titleLabel.adjustsFontForContentSizeCategory = true
@@ -888,6 +941,23 @@ final class FullScreenArtworkHeaderView: UIView {
         artworkView.setContentHuggingPriority(.defaultLow, for: .horizontal)
         let buttonsWidth = buttons.widthAnchor.constraint(equalTo: widthAnchor, constant: -64)
         buttonsWidth.priority = .defaultHigh
+        let buttonsWidthOnArtwork = buttons.widthAnchor.constraint(equalTo: artworkView.widthAnchor, constant: -64)
+        buttonsWidthOnArtwork.priority = .defaultHigh
+        pageCentered = [
+            artworkView.centerXAnchor.constraint(equalTo: artworkContainer.centerXAnchor),
+            textStack.leadingAnchor.constraint(equalTo: leadingAnchor, constant: 24),
+            textStack.trailingAnchor.constraint(equalTo: trailingAnchor, constant: -24),
+            buttons.centerXAnchor.constraint(equalTo: centerXAnchor),
+            buttonsWidth
+        ]
+        artworkCentered = [
+            artworkView.leadingAnchor.constraint(equalTo: artworkContainer.leadingAnchor),
+            textStack.centerXAnchor.constraint(equalTo: artworkView.centerXAnchor),
+            textStack.widthAnchor.constraint(equalTo: artworkView.widthAnchor, constant: -48),
+            buttons.centerXAnchor.constraint(equalTo: artworkView.centerXAnchor),
+            buttonsWidthOnArtwork
+        ]
+        NSLayoutConstraint.activate(pageCentered)
         NSLayoutConstraint.activate([
             containerTop,
             containerHeight,
@@ -897,7 +967,6 @@ final class FullScreenArtworkHeaderView: UIView {
             backdropView.trailingAnchor.constraint(equalTo: artworkContainer.trailingAnchor),
             backdropView.topAnchor.constraint(equalTo: artworkContainer.topAnchor),
             backdropView.bottomAnchor.constraint(equalTo: artworkContainer.bottomAnchor),
-            artworkView.centerXAnchor.constraint(equalTo: artworkContainer.centerXAnchor),
             artworkView.widthAnchor.constraint(lessThanOrEqualTo: artworkContainer.widthAnchor),
             squareArtwork,
             artworkView.topAnchor.constraint(equalTo: artworkContainer.topAnchor),
@@ -909,17 +978,19 @@ final class FullScreenArtworkHeaderView: UIView {
             extensionView.bottomAnchor.constraint(equalTo: buttons.centerYAnchor),
 
             textStack.topAnchor.constraint(equalTo: artworkContainer.bottomAnchor, constant: 12),
-            textStack.leadingAnchor.constraint(equalTo: leadingAnchor, constant: 24),
-            textStack.trailingAnchor.constraint(equalTo: trailingAnchor, constant: -24),
 
             buttons.topAnchor.constraint(equalTo: textStack.bottomAnchor, constant: 20),
-            buttons.centerXAnchor.constraint(equalTo: centerXAnchor),
-            buttonsWidth,
             buttons.widthAnchor.constraint(lessThanOrEqualToConstant: 340),
             buttons.heightAnchor.constraint(equalToConstant: 48),
             shuffleButton.widthAnchor.constraint(equalTo: shuffleButton.heightAnchor),
-            buttons.bottomAnchor.constraint(equalTo: bottomAnchor, constant: -20)
+            buttons.bottomAnchor.constraint(equalTo: bottomAnchor, constant: -(Self.buttonsCenterFromBottom - 24))
         ])
+    }
+
+    private func updateSideMode() {
+        let side = sideExtension > 0
+        NSLayoutConstraint.deactivate(side ? pageCentered : artworkCentered)
+        NSLayoutConstraint.activate(side ? artworkCentered : pageCentered)
     }
 
     required init?(coder: NSCoder) { fatalError("init(coder:)") }
@@ -931,8 +1002,18 @@ final class FullScreenArtworkHeaderView: UIView {
         artworkContainer.layoutIfNeeded()
         let artworkBounds = artworkContainer.bounds
         let isWide = artworkView.bounds.width < artworkBounds.width - 1
-        artworkView.layer.mask = isWide ? artworkEdgeMask : nil
-        artworkEdgeMask.frame = artworkView.bounds
+        let artworkWidth = artworkView.bounds.width
+        if sideExtension > 0 {
+            // The sharp artwork melts into its mirrored right edge over the
+            // same points the extension below fades in over it.
+            artworkView.layer.mask = artworkTrailingMask
+            artworkTrailingMask.frame = artworkView.bounds
+            let start = artworkWidth > 0 ? max(0, 1 - Self.overlap / artworkWidth) : 1
+            artworkTrailingMask.locations = [0, NSNumber(value: Double(start)), 1]
+        } else {
+            artworkView.layer.mask = isWide ? artworkEdgeMask : nil
+            artworkEdgeMask.frame = artworkView.bounds
+        }
         topScrim.frame = CGRect(x: 0, y: 0, width: artworkBounds.width, height: min(stretch + topInset + 40, artworkBounds.height))
         let extensionBounds = extensionView.bounds
         extensionMask.frame = extensionBounds
@@ -942,12 +1023,18 @@ final class FullScreenArtworkHeaderView: UIView {
         let artworkBottom = artworkContainer.frame.maxY
         let fadeTop = artworkBottom - artworkHeight * Self.fadeRise
         fade.frame = CGRect(x: 0, y: fadeTop, width: bounds.width, height: max(extensionView.frame.maxY - fadeTop, 0))
+        // The same fade as below, turned sideways: from as far into the
+        // artwork to the column's edge, as far past the artwork.
+        sideFade.isHidden = sideExtension <= 0
+        let sideTop = artworkContainer.frame.minY
+        let sideStart = artworkContainer.frame.minX + artworkView.frame.maxX - artworkHeight * Self.fadeRise
+        sideFade.frame = CGRect(x: sideStart, y: sideTop, width: max(bounds.width - sideStart, 0), height: max(extensionView.frame.maxY - sideTop, 0))
         CATransaction.commit()
         // Decoded at the width it is shown.
         if abs(artworkBounds.width - loadedWidth) > 1, artworkBounds.width > 0 {
             loadedWidth = artworkBounds.width
             loadArtwork()
-        } else if extensionBounds.width > 0, abs(extensionBounds.height - renderedExtensionSize.height) > 1 || abs(extensionBounds.width - renderedExtensionSize.width) > 1 || abs(artworkHeight - renderedArtworkHeight) > 1 {
+        } else if extensionBounds.width > 0, abs(extensionBounds.height - renderedExtensionSize.height) > 1 || abs(extensionBounds.width - renderedExtensionSize.width) > 1 || abs(artworkHeight - renderedArtworkHeight) > 1 || (sideExtension > 0) != renderedSideMode {
             // A title on more lines makes the extension taller, a turn
             // reshapes the artwork: redraw it so the mirror still meets it.
             loadExtension()
@@ -977,10 +1064,11 @@ final class FullScreenArtworkHeaderView: UIView {
 
     func setPageColor(_ color: UIColor) {
         shuffleButton.pageColor = color
-        // Eased stops (location, opacity): a linear fade shows a visible band.
-        let stops: [(location: NSNumber, alpha: CGFloat)] = [(0, 0), (0.14, 0.08), (0.28, 0.22), (0.42, 0.42), (0.58, 0.64), (0.76, 0.85), (1, 1)]
+        let stops = Self.fadeStops
         fade.colors = stops.map { color.withAlphaComponent($0.alpha).cgColor }
         fade.locations = stops.map(\.location)
+        sideFade.colors = fade.colors
+        sideFade.locations = fade.locations
         extensionView.backgroundColor = color
         artworkContainer.backgroundColor = color
     }
@@ -1029,11 +1117,20 @@ final class FullScreenArtworkHeaderView: UIView {
         let points = max(loadedWidth, 300)
         let key = artwork.cacheKey
         let overlap = Self.overlap
+        let atLeading = sideExtension > 0
+        renderedSideMode = atLeading
         extensionTask = Task { [weak self] in
             guard let image = await ArtworkImageCache.shared.image(for: artwork, points: points) else { return }
             let (backdrop, rendered) = await Task.detached(priority: .userInitiated) {
-                let backdrop = pageWidth > artworkHeight + 1 ? Self.backdropImage(from: image, fitting: CGSize(width: pageWidth, height: artworkHeight)) : nil
-                return (backdrop, Self.extensionImage(from: image, backdrop: backdrop, fitting: size, artworkHeight: artworkHeight, overlap: overlap))
+                let fitting = CGSize(width: pageWidth, height: artworkHeight)
+                let backdrop: UIImage? = if pageWidth <= artworkHeight + 1 {
+                    nil
+                } else if atLeading {
+                    Self.trailingBackdropImage(from: image, fitting: fitting)
+                } else {
+                    Self.backdropImage(from: image, fitting: fitting)
+                }
+                return (backdrop, Self.extensionImage(from: image, backdrop: backdrop, squareAtLeading: atLeading, fitting: size, artworkHeight: artworkHeight, overlap: overlap))
             }.value
             guard !Task.isCancelled, let self, self.artwork?.cacheKey == key else { return }
             UIView.transition(with: self.extensionView, duration: 0.25, options: .transitionCrossDissolve) {
@@ -1049,7 +1146,7 @@ final class FullScreenArtworkHeaderView: UIView {
     /// blurred together: the artwork seems to carry on past its edge. Drawn
     /// small (it is blurred anyway) but in the view's exact proportions, so
     /// the artwork's edge lands exactly where it is on screen.
-    nonisolated private static func extensionImage(from image: UIImage, backdrop: UIImage?, fitting viewSize: CGSize, artworkHeight: CGFloat, overlap overlapPoints: CGFloat) -> UIImage? {
+    nonisolated private static func extensionImage(from image: UIImage, backdrop: UIImage?, squareAtLeading: Bool, fitting viewSize: CGSize, artworkHeight: CGFloat, overlap overlapPoints: CGFloat) -> UIImage? {
         let side: CGFloat = 160
         let scale = side / viewSize.width
         let overlap = overlapPoints * scale
@@ -1061,7 +1158,8 @@ final class FullScreenArtworkHeaderView: UIView {
         // page), as the artwork view shows it, its bottom edge at `overlap`.
         let frame = CGRect(x: 0, y: overlap - artworkHeight * scale, width: side, height: artworkHeight * scale)
         // On a wide page, the square artwork over its blurred sides.
-        let square = backdrop == nil ? frame : CGRect(x: frame.midX - frame.height / 2, y: frame.minY, width: frame.height, height: frame.height)
+        // On a split page, against the leading edge.
+        let square = backdrop == nil ? frame : CGRect(x: squareAtLeading ? frame.minX : frame.midX - frame.height / 2, y: frame.minY, width: frame.height, height: frame.height)
         let strip = UIGraphicsImageRenderer(size: size, format: format).image { context in
             let cg = context.cgContext
             for mirrored in [false, true] {
@@ -1139,6 +1237,38 @@ final class FullScreenArtworkHeaderView: UIView {
             .applyingFilter("CIBlendWithMask", parameters: [kCIInputBackgroundImageKey: light, kCIInputMaskImageKey: maskImage.clampedToExtent()])
             .applyingFilter("CIGaussianBlur", parameters: [kCIInputRadiusKey: 1.5])
             .applyingFilter("CIColorControls", parameters: [kCIInputSaturationKey: 1.1, kCIInputBrightnessKey: -0.02])
+            .cropped(to: input.extent)
+        guard let output = CIContext(options: [.useSoftwareRenderer: false]).createCGImage(blurred, from: input.extent) else { return canvas }
+        return UIImage(cgImage: output)
+    }
+
+    /// A split page's artwork square against the leading edge, its right
+    /// edge mirrored out to the column's edge, blurred as much as the
+    /// extension below it is: drawn at the same 160 points across.
+    nonisolated static func trailingBackdropImage(from image: UIImage, fitting viewSize: CGSize) -> UIImage? {
+        let width: CGFloat = 160
+        let scale = width / viewSize.width
+        let size = CGSize(width: width, height: (viewSize.height * scale).rounded(.up))
+        let format = UIGraphicsImageRendererFormat()
+        format.scale = 1
+        format.opaque = true
+        let square = CGRect(x: 0, y: 0, width: size.height, height: size.height)
+        let filled = aspectFill(image.size, in: square)
+        let canvas = UIGraphicsImageRenderer(size: size, format: format).image { context in
+            let cg = context.cgContext
+            cg.saveGState()
+            cg.clip(to: square)
+            image.draw(in: filled)
+            cg.restoreGState()
+            // Mirrored around the right edge.
+            cg.clip(to: CGRect(x: square.maxX, y: 0, width: width - square.maxX, height: size.height))
+            cg.translateBy(x: square.maxX * 2, y: 0)
+            cg.scaleBy(x: -1, y: 1)
+            image.draw(in: filled)
+        }
+        guard let input = CIImage(image: canvas) else { return canvas }
+        let blurred = input.clampedToExtent()
+            .applyingFilter("CIGaussianBlur", parameters: [kCIInputRadiusKey: 9])
             .cropped(to: input.extent)
         guard let output = CIContext(options: [.useSoftwareRenderer: false]).createCGImage(blurred, from: input.extent) else { return canvas }
         return UIImage(cgImage: output)

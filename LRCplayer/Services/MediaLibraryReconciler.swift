@@ -66,6 +66,22 @@ enum MediaLibraryReconciler {
             }
         }
 
+        // The same file synced twice (a Finder sync that copies the whole
+        // library again): two live tracks with the same tags. The oldest
+        // song keeps the history, the copy folds into it.
+        var keptByKey: [String: [Song]] = [:]
+        for song in holder.values.sorted(by: { $0.addedAt < $1.addedAt }) {
+            let key = matchKey(title: song.title, artist: song.artist, album: song.album)
+            if let kept = keptByKey[key]?.first(where: { isSameRecording($0, song) }) {
+                plan.merges[song.id] = kept.id
+                for (other, target) in plan.merges where target == song.id {
+                    plan.merges[other] = kept.id
+                }
+            } else {
+                keptByKey[key, default: []].append(song)
+            }
+        }
+
         let orphans = songs.filter { song in
             song.persistentID.map { !livePIDs.contains($0) } ?? true
         }
@@ -118,6 +134,35 @@ enum MediaLibraryReconciler {
         // Disc 0 is "untagged", read as disc 1.
         guard max(song.discNumber, 1) == max(track.discNumber, 1) else { return nil }
         return cost
+    }
+
+    /// Two songs from one file synced twice: same tags, a known duration
+    /// within the drift, same track and disc. A redux or live take differs
+    /// in album or duration.
+    static func isSameRecording(_ a: Song, _ b: Song) -> Bool {
+        guard matchKey(title: a.title, artist: a.artist, album: a.album)
+                == matchKey(title: b.title, artist: b.artist, album: b.album),
+              a.duration > 0, b.duration > 0,
+              abs(a.duration - b.duration) <= durationTolerance,
+              max(a.discNumber, 1) == max(b.discNumber, 1) else { return false }
+        if a.trackNumber > 0, b.trackNumber > 0 { return a.trackNumber == b.trackNumber }
+        return true
+    }
+
+    /// `candidates` without the ones already in `existing` (or twice among
+    /// themselves): the copies a whole-library re-sync made.
+    static func withoutCopies(_ candidates: [Song], of existing: [Song]) -> Set<UUID> {
+        var byKey = Dictionary(grouping: existing) { matchKey(title: $0.title, artist: $0.artist, album: $0.album) }
+        var copies = Set<UUID>()
+        for song in candidates {
+            let key = matchKey(title: song.title, artist: song.artist, album: song.album)
+            if byKey[key]?.contains(where: { isSameRecording($0, song) }) == true {
+                copies.insert(song.id)
+            } else {
+                byKey[key, default: []].append(song)
+            }
+        }
+        return copies
     }
 
     static func matchKey(title: String, artist: String, album: String) -> String {

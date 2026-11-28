@@ -203,7 +203,7 @@ final class WhatSongGame: ObservableObject {
         stopAudio()
         guard song.duration > 0 else { return }
 
-        let player = AVPlayer(url: song.playableFileURL)
+        let player = AVPlayer(url: song.excerptURL)
         let safeStart = clipStart
         let startTime = CMTime(seconds: safeStart, preferredTimescale: 600)
         let clipEnd = CMTime(seconds: safeStart + min(snippetDuration, song.duration), preferredTimescale: 600)
@@ -619,7 +619,20 @@ struct WhatSongIsThatGameView: View {
 }
 
 extension Song {
+    /// Can be heard in a game: a file on disk, or a server song, streamed.
     var isExcerptPlayable: Bool {
+        hasDecodableAudio || (isRemote && remoteID != nil)
+    }
+
+    /// Where a game's excerpt plays from: the file, or the server's stream.
+    @MainActor var excerptURL: URL {
+        guard isRemote, !isDownloaded else { return playableFileURL }
+        return SubsonicService.shared.streamURL(for: self) ?? playableFileURL
+    }
+
+    /// A file on disk, read whole (Music Tiles, the Playground): a streamed
+    /// song doesn't qualify.
+    var hasDecodableAudio: Bool {
         // Media-library items without an exportable asset (e.g. DRM / cloud-only
         // tracks) are stored with a placeholder `media-library://` URL that
         // AVPlayer cannot open: games would play silence for them.
@@ -827,7 +840,7 @@ final class WhoSingsGame: ObservableObject {
     /// The answer, heard: the song from the line shown.
     private func playReveal() {
         guard let question, question.song.isExcerptPlayable else { return }
-        let player = AVPlayer(url: question.song.playableFileURL)
+        let player = AVPlayer(url: question.song.excerptURL)
         // Line times include the [offset:] tag; playback time doesn't.
         let start = max(0, (question.time.map { $0 - question.offset } ?? question.song.duration * 0.3) - 0.3)
         audio = player
@@ -888,7 +901,7 @@ struct WhoSingsGameView: View {
     private var background: some View {
         ZStack {
             if game.selected != nil, let q = game.question {
-                PlayerBackgroundRepresentable(artwork: q.song.artworkSource)
+                PlayerBackgroundRepresentable(artwork: q.song.artworkSource, showsMotion: false)
                     .transition(.opacity)
             } else {
                 LinearGradient(colors: [Color(white: 0.11), Color(white: 0.05)], startPoint: .topLeading, endPoint: .bottomTrailing)

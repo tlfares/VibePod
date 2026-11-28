@@ -12,12 +12,19 @@ struct PlayerView: View {
     /// False when the presenting card draws the backdrop itself.
     var drawsBackground = true
     @EnvironmentObject private var router: AppRouter
+    /// Handed on to the iPad layout's parts, hosted on their own.
+    @Environment(\.appServicesStorage) private var servicesStorage
     @State private var showQueueSheet = false
     @State private var scrubbingTime: TimeInterval?
     @State private var playlistPickerSong: Song?
     @State private var lyricsSurfaceReady = false
+    /// The iPad layout's parts, measured: title row, and the rest.
+    @State private var tallInfoHeight: CGFloat = 56
+    @State private var tallPlaybackHeight: CGFloat = 270
     /// Turning from one side to the other keeps the same size: this redraws.
     @State private var topOnTheRight = PlayerView.isTopOnTheRight
+    /// The iPad's wide layout: the cover stays in sight beside the lyrics.
+    @State private var isWideLayout = false
     @AppStorage(NowPlayingArtworkStyle.storageKey) private var fullScreenArtworkSetting = false
     @AppStorage("hiddenSettingsUnlocked") private var hiddenSettingsUnlocked = false
     /// A hidden feature: off for anyone without hidden settings showing.
@@ -41,8 +48,9 @@ struct PlayerView: View {
 
                 if Self.isShortLandscape(geometry.size) {
                     shortLandscapeLayout(in: geometry)
-                } else if Self.isSideBySide(geometry.size) {
-                    sideBySideLayout(in: geometry)
+                } else if Self.isSideBySide(geometry.size) || Self.isTallRegular(geometry.size) {
+                    // One layout either way up: turning keeps every part.
+                    iPadLayout(in: geometry)
                 } else {
                     stackedLayout(in: geometry)
                 }
@@ -54,8 +62,9 @@ struct PlayerView: View {
                         tint: playerVM.currentSong?.coverMenuTint)
                 .padding(.top, 44)
         }
-        .onGeometryChange(for: CGSize.self, of: \.size) { _ in
+        .onGeometryChange(for: CGSize.self, of: \.size) { size in
             topOnTheRight = Self.isTopOnTheRight
+            isWideLayout = !Self.isShortLandscape(size) && (Self.isSideBySide(size) || Self.isTallRegular(size))
         }
         .onReceive(NotificationCenter.default.publisher(for: UIDevice.orientationDidChangeNotification)) { _ in
             // The interface turns a moment after the device does.
@@ -94,8 +103,9 @@ struct PlayerView: View {
         .onChange(of: playerVM.isPlaying, initial: true) { _, playing in
             motion.isPlaying = playing
         }
+        .onChange(of: isWideLayout) { updateVideoPlace() }
         .onChange(of: playerVM.showLyrics, initial: true) { _, shows in
-            musicVideo.isSuppressed = shows
+            updateVideoPlace()
             motion.isDimmed = shows
             updateStill()
         }
@@ -112,6 +122,12 @@ struct PlayerView: View {
     /// sideways): the cover and controls make a column, lyrics go beside it.
     static func isSideBySide(_ size: CGSize) -> Bool {
         size.width >= 700 && size.width > size.height * 1.15
+    }
+
+    /// An iPad upright, or a large, squarish window: room for a large
+    /// cover over the controls, and for a header over the lyrics.
+    static func isTallRegular(_ size: CGSize) -> Bool {
+        size.width >= 680 && size.height >= 680 && !isSideBySide(size)
     }
 
     /// An iPhone turned sideways: too short for a column under the cover.
@@ -238,12 +254,19 @@ struct PlayerView: View {
                 // The motion artwork behind stands in for the cover; it
                 // still swipes between songs.
                 cover: { coverContent(in: geometry, hidesCover: hidesCover) },
-                lyrics: { lyricsModeContent(videoWidth: artworkBaseSize(for: geometry)).padding(.top, bleeds ? max(0, grabberHeight(in: geometry) - Self.deviceInsets.top) : 0) }
+                lyrics: {
+                    lyricsModeContent(videoWidth: artworkBaseSize(for: geometry))
+                        .padding(.top, bleeds ? max(0, grabberHeight(in: geometry) - Self.deviceInsets.top) : 0)
+                        // Lined up with the title and controls below.
+                        .frame(maxWidth: bleeds ? .infinity : stackedControlsWidth(in: geometry))
+                        .frame(maxWidth: .infinity)
+                }
             )
             .frame(maxWidth: .infinity, maxHeight: .infinity)
 
             playbackSection
                 .padding(.horizontal, 28)
+                .frame(maxWidth: bleeds ? .infinity : stackedControlsWidth(in: geometry))
                 .padding(.bottom, bottomPadding)
         }
         .background {
@@ -266,6 +289,12 @@ struct PlayerView: View {
         .frame(width: geometry.size.width, height: geometry.size.height)
     }
 
+    /// With the lyrics open the video moves to the small cover by the
+    /// title, except on a wide screen, where the large one stays in sight.
+    private func updateVideoPlace() {
+        musicVideo.isSuppressed = playerVM.showLyrics && !isWideLayout
+    }
+
     /// Full-Screen Artwork on an iPhone, under the lyrics: the cover stays
     /// behind them, dimmed like a motion artwork (whose video, when there's
     /// one, takes its place). The cover itself keeps its own blur.
@@ -284,81 +313,235 @@ struct PlayerView: View {
         topSafePadding(from: geometry) + 24
     }
 
-    /// The Now Playing column (cover, title, controls) with the lyrics
-    /// beside it. Without lyrics the column stands in the middle.
-    private func sideBySideLayout(in geometry: GeometryProxy) -> some View {
-        let insets = Self.deviceInsets
-        let top = topSafePadding(from: geometry) + 24
-        let bottom = bottomPadding
-        let columnWidth = min(max(geometry.size.width * 0.42, 340), 460)
-        // Title row and controls under the cover: about 290 points.
-        let artworkSize = max(160, min(columnWidth - 56, geometry.size.height - top - bottom - 290 - 40))
-        let showsLyrics = playerVM.showLyrics
+    /// An iPad, either way up (or a large window). One layout for every
+    /// shape, so turning the iPad keeps every part in place: only their
+    /// positions change, animated by UIKit (see `IPadPlayerCanvas`).
+    ///
+    /// Sideways, the cover and controls sit side by side; with the lyrics,
+    /// they make a column at the leading edge and the lyrics take the rest.
+    /// Upright, a large cover over the title and controls; with the lyrics,
+    /// the cover and title become a header, the controls settle at the
+    /// bottom and the lyrics take the width between.
+    private func iPadLayout(in geometry: GeometryProxy) -> some View {
+        let size = geometry.size
+        let shows = playerVM.showLyrics
+        let metrics = iPadMetrics(for: size, in: geometry)
+        // Drawn once at the largest size the screen allows, then only
+        // scaled: nothing is redrawn as the iPad turns, a window is resized
+        // or the lyrics open.
+        let rendered = max(metrics.largeCover, Self.iPadRenderedCover)
+        let placements = iPadPlacements(metrics, rendered: rendered, showsLyrics: shows)
+        // Shrunk to a header, a swipe on the cover would count several times
+        // over (the pager measures in its own, unscaled points). Judged by
+        // the size shown: the Mac's lyrics column keeps a large cover drawn
+        // at under half its rendered size.
+        let coverScale = placements[1].scale
+        let pagesCover = rendered * coverScale >= 240
+        let anchor = coverAnchorSize(rendered * artworkScale)
+
+        let lyrics = Group {
+            if lyricsSurfaceReady || shows {
+                LyricsView(playerVM: playerVM)
+            } else {
+                Color.clear
+            }
+        }
+        let cover = FullscreenCoverPager(
+            previousSong: playerVM.previousSongPreview,
+            currentSong: playerVM.currentSong,
+            nextSong: playerVM.nextSongPreview,
+            artworkSize: rendered,
+            artworkScale: artworkScale,
+            allowsPaging: pagesCover,
+            resetID: 0,
+            transitionAnchors: transitionAnchors,
+            onPrevious: { playerVM.previousTrack() },
+            onNext: { playerVM.next() }
+        )
+        // The neighbouring covers wait just outside, beyond the shadow.
+        .frame(width: rendered + 144, height: rendered)
+        .mask { Rectangle().padding(.vertical, -90) }
+        .overlay {
+            NativePlayerTransitionAnchor(role: .large, anchors: transitionAnchors)
+                .frame(width: anchor.width, height: anchor.height)
+                .allowsHitTesting(false)
+        }
+        let info = songInfoRow
+            .frame(width: metrics.controlsWidth)
+            .fixedSize(horizontal: false, vertical: true)
+            .onGeometryChange(for: CGFloat.self, of: \.size.height) { height in
+                if abs(height - tallInfoHeight) > 1 { tallInfoHeight = height }
+            }
+            .frame(maxHeight: .infinity)
+        let playback = VStack(spacing: 0) {
+            // Hidden (not removed) with the lyrics: the block keeps its height.
+            NowPlayingLyricPreview(playerVM: playerVM, isActive: !shows)
+                .opacity(shows ? 0 : 1)
+                .allowsHitTesting(!shows)
+                .accessibilityHidden(shows)
+            playbackSection
+        }
+        .frame(width: metrics.controlsWidth)
+        .fixedSize(horizontal: false, vertical: true)
+        .onGeometryChange(for: CGFloat.self, of: \.size.height) { height in
+            if abs(height - tallPlaybackHeight) > 1 { tallPlaybackHeight = height }
+        }
+        .frame(maxHeight: .infinity)
 
         return ZStack(alignment: .top) {
-            HStack(spacing: 0) {
-                VStack(spacing: 0) {
-                    Spacer(minLength: 0)
-                    FullscreenCoverPager(
-                        previousSong: playerVM.previousSongPreview,
-                        currentSong: playerVM.currentSong,
-                        nextSong: playerVM.nextSongPreview,
-                        artworkSize: artworkSize,
-                        artworkScale: artworkScale,
-                        allowsPaging: true,
-                        resetID: 0,
-                        transitionAnchors: transitionAnchors,
-                        onPrevious: { playerVM.previousTrack() },
-                        onNext: { playerVM.next() }
-                    )
-                    .frame(width: columnWidth, height: artworkSize + 40)
-                    // The neighbouring covers wait just outside the pager:
-                    // off screen when it spans the screen, beside the lyrics
-                    // here. Taller than the pager so the shadow isn't cut.
-                    .mask { Rectangle().padding(.vertical, -80) }
-                    .overlay {
-                        NativePlayerTransitionAnchor(role: .large, anchors: transitionAnchors)
-                            .frame(width: coverAnchorSize(artworkSize * artworkScale).width, height: coverAnchorSize(artworkSize * artworkScale).height)
-                            .allowsHitTesting(false)
-                    }
-
-                    songInfoRow
-                        .padding(.horizontal, 28)
-                        .padding(.top, 12)
-                        .padding(.bottom, 14)
-
-                    // Kept in the layout while the lyrics are open: taking
-                    // it out would move the whole column (cover included)
-                    // during the slide, which stutters on iPad.
-                    NowPlayingLyricPreview(playerVM: playerVM)
-                        .padding(.horizontal, 28)
-                        .opacity(showsLyrics ? 0 : 1)
-                        .allowsHitTesting(!showsLyrics)
-                        .accessibilityHidden(showsLyrics)
-
-                    playbackSection
-                        .padding(.horizontal, 28)
-                    Spacer(minLength: 0)
-                }
-                .frame(width: columnWidth)
-                .padding(.leading, insets.left)
-                .frame(maxWidth: showsLyrics ? columnWidth + insets.left : .infinity)
-
-                if showsLyrics {
-                    LyricsView(playerVM: playerVM)
-                        .padding(.trailing, insets.right)
-                        .frame(maxWidth: .infinity, maxHeight: .infinity)
-                        .transition(.opacity.combined(with: .offset(x: 60)))
-                }
-            }
-            .padding(.top, top)
-            .padding(.bottom, bottom)
+            IPadPlayerCanvas(
+                parts: [hosted(lyrics), hosted(cover), hosted(info), hosted(playback)],
+                placements: placements
+            )
+            .animation(.spring(duration: 0.5, bounce: 0.06), value: shows)
 
             grabber
                 .padding(.top, topSafePadding(from: geometry))
         }
-        .frame(width: geometry.size.width, height: geometry.size.height)
-        .animation(.spring(duration: 0.55, bounce: 0.08), value: showsLyrics)
+        .frame(width: size.width, height: size.height)
+    }
+
+    /// A part of the iPad player, hosted on its own: it gets what the
+    /// player's environment would have given it.
+    private func hosted(_ content: some View) -> AnyView {
+        AnyView(content
+            .environment(\.colorScheme, .dark)
+            .environment(\.appServicesStorage, servicesStorage)
+            .modifier(StoredAppTint())
+            .environmentObject(router)
+            .environmentObject(playerVM)
+            .environmentObject(libraryVM))
+    }
+
+    /// The iPad player's cover at its largest on this screen, either way
+    /// up: a fixed size, whatever the window's.
+    private static var iPadRenderedCover: CGFloat {
+        let screen = UIApplication.shared.connectedScenes
+            .compactMap { ($0 as? UIWindowScene)?.screen.bounds.size }
+            .first ?? CGSize(width: 834, height: 1194)
+        return min(760, min(screen.width, screen.height) - 80).rounded()
+    }
+
+    private struct IPadMetrics {
+        var size: CGSize
+        var isWide: Bool
+        var leading: CGFloat
+        var trailing: CGFloat
+        var top: CGFloat
+        var usableWidth: CGFloat
+        var usableHeight: CGFloat
+        var controlsWidth: CGFloat
+        var largeCover: CGFloat
+        var infoHeight: CGFloat
+        var playbackHeight: CGFloat
+    }
+
+    private func iPadMetrics(for size: CGSize, in geometry: GeometryProxy) -> IPadMetrics {
+        let insets = Self.deviceInsets
+        let isWide = size.width > size.height * 1.15
+        let top = topSafePadding(from: geometry) + (isWide ? 24 : 30)
+        let usableHeight = size.height - top - bottomPadding
+        let usableWidth = size.width - insets.left - insets.right
+        let infoHeight = tallInfoHeight
+        let playbackHeight = tallPlaybackHeight
+        var metrics = IPadMetrics(size: size, isWide: isWide, leading: insets.left, trailing: insets.right, top: top,
+                                  usableWidth: usableWidth, usableHeight: usableHeight, controlsWidth: 0, largeCover: 0,
+                                  infoHeight: infoHeight, playbackHeight: playbackHeight)
+        if isWide {
+            metrics.controlsWidth = min(500, max(320, (usableWidth * 0.4).rounded()))
+            metrics.largeCover = max(160, min(usableHeight - 48, usableWidth - metrics.controlsWidth - 56 - 72, 720)).rounded()
+        } else {
+            let contentWidth = min(usableWidth - 80, 820)
+            let header = min(220, max(132, (contentWidth * 0.26).rounded()))
+            metrics.controlsWidth = min(600, contentWidth - header - 24)
+            // A short window keeps what room it has: the group never runs
+            // off the bottom.
+            metrics.largeCover = max(120, min(contentWidth, usableHeight - 34 - infoHeight - 14 - playbackHeight - 12, 760)).rounded()
+        }
+        return metrics
+    }
+
+    /// Lyrics, cover, title, controls.
+    private func iPadPlacements(_ m: IPadMetrics, rendered: CGFloat, showsLyrics shows: Bool) -> [IPadPlayerPlacement] {
+        let coverBox = CGSize(width: rendered + 144, height: rendered)
+        let infoBox = CGSize(width: m.controlsWidth, height: m.infoHeight + 20)
+        let playbackBox = CGSize(width: m.controlsWidth, height: m.playbackHeight + 20)
+        let midY = m.top + m.usableHeight / 2
+
+        if m.isWide {
+            // Without lyrics: cover and controls side by side, centered.
+            let gap: CGFloat = 56
+            let large = m.largeCover
+            let groupX = m.leading + (m.usableWidth - (large + gap + m.controlsWidth)) / 2
+            let blockHeight = m.infoHeight + 14 + m.playbackHeight
+            let controlsX = groupX + large + gap + m.controlsWidth / 2
+            let blockTop = max(m.top, midY - blockHeight / 2)
+
+            // With them: the cover over the controls, in a column. A short
+            // window has no room for the cover there: it fades out.
+            let margin: CGFloat = 36
+            let columnX = m.leading + margin + m.controlsWidth / 2
+            let columnGap: CGFloat = 24
+            let room = min(m.controlsWidth - 40, m.usableHeight - blockHeight - columnGap)
+            let keepsCover = room >= 150
+            let small = keepsCover ? room.rounded() : large * 0.6
+            let columnTop = keepsCover
+                ? m.top + max(0, (m.usableHeight - (small + columnGap + blockHeight)) / 2)
+                : m.top + max(0, (m.usableHeight - blockHeight) / 2) - small - columnGap
+            let columnBlockTop = keepsCover ? columnTop + small + columnGap : m.top + max(0, (m.usableHeight - blockHeight) / 2)
+
+            let lyricsLeading = m.leading + margin + m.controlsWidth + 40
+            let lyricsWidth = max(0, m.size.width - m.trailing - lyricsLeading - 24)
+            let lyricsCenter = CGPoint(x: lyricsLeading + lyricsWidth / 2 + (shows ? 0 : 60), y: midY)
+
+            let coverCenter = shows && keepsCover
+                ? CGPoint(x: columnX, y: columnTop + small / 2)
+                : CGPoint(x: groupX + large / 2, y: midY)
+            let infoY = (shows ? columnBlockTop : blockTop) + m.infoHeight / 2
+            let playbackY = (shows ? columnBlockTop : blockTop) + m.infoHeight + 14 + m.playbackHeight / 2
+            let x = shows ? columnX : controlsX
+            return [
+                IPadPlayerPlacement(center: lyricsCenter, size: CGSize(width: lyricsWidth, height: m.usableHeight),
+                                    alpha: shows ? 1 : 0, isInteractive: shows),
+                IPadPlayerPlacement(center: coverCenter, size: coverBox, scale: (shows ? small : large) / rendered,
+                                    alpha: shows && !keepsCover ? 0 : 1, isInteractive: !(shows && !keepsCover)),
+                IPadPlayerPlacement(center: CGPoint(x: x, y: infoY), size: infoBox),
+                IPadPlayerPlacement(center: CGPoint(x: x, y: playbackY), size: playbackBox),
+            ]
+        }
+
+        let contentWidth = min(m.usableWidth - 80, 820)
+        let leading = m.leading + (m.usableWidth - contentWidth) / 2
+        let centerX = leading + contentWidth / 2
+        let header = min(220, max(132, (contentWidth * 0.26).rounded()))
+        let cover = m.largeCover
+
+        // Without lyrics: cover, title, controls, centered as one group.
+        let groupHeight = cover + 34 + m.infoHeight + 14 + m.playbackHeight
+        let groupTop = m.top + max(0, (m.usableHeight - groupHeight) / 2)
+        // With them: cover and title in a header, controls at the bottom.
+        let lyricsTop = m.top + header + 16
+        // The faded line preview at the top of the controls lies under them.
+        let lyricsBottom = m.top + m.usableHeight - m.playbackHeight + 34
+        let lyricsHeight = max(0, lyricsBottom - lyricsTop)
+
+        let coverCenter = shows
+            ? CGPoint(x: leading + header / 2, y: m.top + header / 2)
+            : CGPoint(x: centerX, y: groupTop + cover / 2)
+        let infoCenter = shows
+            ? CGPoint(x: leading + header + 24 + m.controlsWidth / 2, y: m.top + header / 2)
+            : CGPoint(x: centerX, y: groupTop + cover + 34 + m.infoHeight / 2)
+        let playbackCenter = shows
+            ? CGPoint(x: centerX, y: m.top + m.usableHeight - m.playbackHeight / 2)
+            : CGPoint(x: centerX, y: groupTop + cover + 34 + m.infoHeight + 14 + m.playbackHeight / 2)
+        return [
+            IPadPlayerPlacement(center: CGPoint(x: centerX, y: lyricsTop + lyricsHeight / 2 + (shows ? 0 : 50)),
+                                size: CGSize(width: contentWidth, height: lyricsHeight),
+                                alpha: shows ? 1 : 0, isInteractive: shows),
+            IPadPlayerPlacement(center: coverCenter, size: coverBox, scale: (shows ? header : cover) / rendered),
+            IPadPlayerPlacement(center: infoCenter, size: infoBox),
+            IPadPlayerPlacement(center: playbackCenter, size: playbackBox),
+        ]
     }
 
     private var bottomPadding: CGFloat {
@@ -370,7 +553,23 @@ struct PlayerView: View {
         return CGSize(width: floor(size.width / step) * step, height: floor(size.height / step) * step)
     }
 
+    @ViewBuilder
     private var grabber: some View {
+        if MacApp.isActive {
+            // No drag and no button on the Mac: Escape (the Controls menu),
+            // the swipe and the player bar close it. Kept in place so the layout doesn't move.
+            Button("Close Now Playing") {
+                playerVM.dismissPlayer()
+            }
+            .frame(width: 34, height: 34)
+            .opacity(0)
+            .allowsHitTesting(false)
+        } else {
+            touchGrabber
+        }
+    }
+
+    private var touchGrabber: some View {
         Button {
             playerVM.dismissPlayer()
         } label: {
@@ -509,11 +708,20 @@ struct PlayerView: View {
             songInfoRow
                 .padding(.horizontal, 28)
                 .padding(.bottom, 14)
+                .frame(maxWidth: stackedControlsWidth(in: geometry))
 
             NowPlayingLyricPreview(playerVM: playerVM)
                 .padding(.horizontal, 28)
+                .frame(maxWidth: stackedControlsWidth(in: geometry))
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
+    }
+
+    /// On a large screen held upright the title and controls keep to the
+    /// cover's width, as on a phone, instead of spanning the screen.
+    private func stackedControlsWidth(in geometry: GeometryProxy) -> CGFloat {
+        guard LargeScreen.contains(geometry.size) else { return .infinity }
+        return max(artworkBaseSize(for: geometry), 480) + 56
     }
 
     private var lyricsModeContent: some View { lyricsModeContent(videoWidth: nil) }
@@ -764,6 +972,7 @@ struct PlayerView: View {
                     Button("Add to Playlist…", systemImage: "text.badge.plus") {
                         playlistPickerSong = song
                     }
+                    if song.isRemote { ServerDownloadMenuItem(song: song) }
                 }
                 if motionArtwork, motion.video != nil || motion.isHiddenForAlbum {
                     Section {
@@ -807,7 +1016,7 @@ struct PlayerView: View {
                         } else if AIFeatures.isAvailable {
                             Button("Sync Word by Word", systemImage: "text.word.spacing") {
                                 // The file's lines: the timings are saved against them.
-                                WordSyncGenerator.shared.sync(song, lyrics: playerVM.rawLyrics ?? lyrics)
+                                WordSyncGenerator.shared.sync(song, lyrics: playerVM.rawLyrics ?? lyrics, in: libraryVM.libraryService)
                                 showLyricsIfHidden()
                             }
                         }
@@ -839,14 +1048,13 @@ struct PlayerView: View {
     }
 
     private func seek(by delta: TimeInterval) {
-        let target = playerVM.playerService.preciseCurrentTime + delta
-        playerVM.seek(to: max(0, min(target, playerVM.duration)))
+        playerVM.skip(by: delta)
     }
 
     /// As wide as the margins allow, up to what still leaves room for the
     /// title and controls below (the iPhone Duo's cover display is short).
     private func artworkBaseSize(for geometry: GeometryProxy) -> CGFloat {
-        let maxArtwork: CGFloat = LargeScreen.contains(geometry.size) ? 520 : 400
+        let maxArtwork: CGFloat = LargeScreen.contains(geometry.size) ? 600 : 400
         // Grabber, title row and controls: about 330 points plus the insets;
         // the pager adds 72 around the cover for its shadow.
         let room = geometry.size.height - topSafePadding(from: geometry) - bottomPadding - 330 - 72
@@ -1879,11 +2087,13 @@ struct PlaybackControlButton: View {
 }
 
 struct AirPlayRoutePicker: UIViewRepresentable {
+    var tint: UIColor = .white
+
     func makeUIView(context: Context) -> AVRoutePickerView {
         let picker = AVRoutePickerView()
         picker.prioritizesVideoDevices = false
-        picker.tintColor = .white
-        picker.activeTintColor = .white
+        picker.tintColor = tint
+        picker.activeTintColor = tint == .white ? .white : .tintColor
         return picker
     }
 
@@ -1942,6 +2152,9 @@ struct LiquidGlassSeekSlider: UIViewRepresentable {
     }
 
     private func configure(_ slider: MediaPlaybackSlider) {
+        // The Mac's own slider can't be recolored (UIKit throws): the
+        // touch one, drawn the same everywhere.
+        if MacApp.isActive { slider.preferredBehavioralStyle = .pad }
         slider.minimumTrackTintColor = UIColor.label.withAlphaComponent(0.92)
         slider.maximumTrackTintColor = UIColor.label.withAlphaComponent(0.24)
         slider.thumbTintColor = UIColor.label.withAlphaComponent(0.92)
@@ -2444,7 +2657,10 @@ struct FullscreenCoverPage: View {
                     MusicVideoPlayer.shared.toggle(for: song)
                 }
                 .modifier(MusicVideoMenu(song: anchors != nil ? song : nil, width: artworkSize))
-                .shadow(color: .black.opacity(0.32), radius: 28, y: 18)
+                // Drawn from its shape, not the cover's pixels: a blurred
+                // copy of the cover redrawn every frame stalled the iPad's
+                // large screen (scrolling the lyrics, moving the cover).
+                .background { PathShadow(cornerRadius: 12, opacity: 0.32, radius: 28, y: 18) }
                 // Whatever rebuilt the page, the shape always eases.
                 .animation(.spring(duration: 0.6, bounce: 0.12), value: showsVideo)
                 // A page handed another song (after a swipe) starts afresh:
@@ -2757,15 +2973,51 @@ final class ArtworkFadeMaskView: UIView {
 
 struct PlayerBackgroundRepresentable: UIViewRepresentable {
     let artwork: ArtworkSource?
+    /// Off outside the player (games): the motion artwork belongs to the
+    /// song that's playing, not to the one shown.
+    var showsMotion = true
 
     func makeUIView(context: Context) -> PlayerBackgroundUIView {
-        let view = PlayerBackgroundUIView()
+        let view = PlayerBackgroundUIView(showsMotion: showsMotion)
         view.update(source: artwork, animated: false)
         return view
     }
 
     func updateUIView(_ uiView: PlayerBackgroundUIView, context: Context) {
         uiView.update(source: artwork, animated: true)
+    }
+}
+
+/// A soft shadow under a rounded rectangle, drawn from its outline: cheap
+/// to draw, however large or wherever it moves.
+struct PathShadow: UIViewRepresentable {
+    var cornerRadius: CGFloat
+    var opacity: Float
+    var radius: CGFloat
+    var y: CGFloat
+
+    func makeUIView(context: Context) -> ShadowView {
+        let view = ShadowView()
+        view.isUserInteractionEnabled = false
+        view.backgroundColor = .clear
+        view.layer.shadowColor = UIColor.black.cgColor
+        return view
+    }
+
+    func updateUIView(_ view: ShadowView, context: Context) {
+        view.cornerRadius = cornerRadius
+        view.layer.shadowOpacity = opacity
+        view.layer.shadowRadius = radius
+        view.layer.shadowOffset = CGSize(width: 0, height: y)
+        view.setNeedsLayout()
+    }
+
+    final class ShadowView: UIView {
+        var cornerRadius: CGFloat = 12
+        override func layoutSubviews() {
+            super.layoutSubviews()
+            layer.shadowPath = UIBezierPath(roundedRect: bounds, cornerRadius: cornerRadius).cgPath
+        }
     }
 }
 
@@ -2783,7 +3035,7 @@ final class PlayerBackgroundUIView: UIView {
     private let scrimLayer = CALayer()
     private let vignetteLayer = CAGradientLayer()
     /// Above the colors, upright whatever this view's own turn.
-    private let motionView = MotionArtworkView()
+    private let motionView: MotionArtworkView?
 
     private var currentSource: ArtworkSource?
     private var currentColors: [UIColor]?
@@ -2791,9 +3043,11 @@ final class PlayerBackgroundUIView: UIView {
     private var artworkColors: [UIColor]?
     private var videoObserver: NSObjectProtocol?
 
-    override init(frame: CGRect) {
-        super.init(frame: frame)
+    init(showsMotion: Bool = true) {
+        motionView = showsMotion ? MotionArtworkView() : nil
+        super.init(frame: .zero)
         setupLayers()
+        guard showsMotion else { return }
         videoObserver = NotificationCenter.default.addObserver(forName: MusicVideoPlayer.colorsDidChange, object: nil, queue: .main) { [weak self] _ in
             MainActor.assumeIsolated { self?.followVideoColors() }
         }
@@ -2835,7 +3089,7 @@ final class PlayerBackgroundUIView: UIView {
         updateVignetteColors()
         layer.addSublayer(vignetteLayer)
 
-        addSubview(motionView)
+        if let motionView { addSubview(motionView) }
     }
 
     /// The card turns this view against the screen's turn so the colors
@@ -2870,10 +3124,12 @@ final class PlayerBackgroundUIView: UIView {
 
         let angle = atan2(transform.b, transform.a)
         let sideways = Int((abs(angle) / (.pi / 2)).rounded()) % 2 == 1
-        motionView.transform = .identity
-        motionView.bounds.size = sideways ? CGSize(width: bounds.height, height: bounds.width) : bounds.size
-        motionView.center = CGPoint(x: bounds.midX, y: bounds.midY)
-        motionView.transform = CGAffineTransform(rotationAngle: -angle)
+        if let motionView {
+            motionView.transform = .identity
+            motionView.bounds.size = sideways ? CGSize(width: bounds.height, height: bounds.width) : bounds.size
+            motionView.center = CGPoint(x: bounds.midX, y: bounds.midY)
+            motionView.transform = CGAffineTransform(rotationAngle: -angle)
+        }
 
         // Large spot diameter so the 4 blooms gracefully overlap in the center
         let spotDiameter = max(bounds.width, bounds.height) * 1.1
@@ -2926,7 +3182,9 @@ final class PlayerBackgroundUIView: UIView {
             }.value
             guard let self, self.currentSource == source else { return }
             self.artworkColors = colors
-            if !Self.followsVideo || MusicVideoPlayer.shared.colors == nil {
+            // Outside the player (Wrapped, games), the video's colors aren't
+            // followed: the cover's, always.
+            if !Self.followsVideo || self.motionView == nil || MusicVideoPlayer.shared.colors == nil {
                 self.applyColors(colors, animated: animated)
             }
         }
@@ -2964,6 +3222,9 @@ struct NowPlayingLyricPreview: View {
     static let storageKey = "showPlayerLyricPreview"
 
     @ObservedObject var playerVM: PlayerViewModel
+    /// Hidden under the lyrics: a still line, without the word-by-word
+    /// drawing that runs every frame.
+    var isActive = true
     @AppStorage(Self.storageKey) private var isEnabled = true
 
     var body: some View {
@@ -2994,7 +3255,7 @@ struct NowPlayingLyricPreview: View {
     @ViewBuilder
     private var lineView: some View {
         let line = playerVM.currentLyricLine
-        if let line, !line.isInstrumentalGap, let timings = playerVM.currentWordTimings[line.id], !timings.isEmpty {
+        if isActive, let line, !line.isInstrumentalGap, let timings = playerVM.currentWordTimings[line.id], !timings.isEmpty {
             WordSyncedPreviewLine(text: line.text, timings: timings, lineEnd: lineEnd(after: line), playerService: playerVM.playerService)
         } else {
             Text(lineText)
@@ -3226,7 +3487,7 @@ private struct TranslateLyricsMenuItem: View {
 }
 
 /// Touch and hold the music video: back to the cover, another video, or
-/// iOS's own player full screen.
+/// VibePod's own full screen.
 private struct MusicVideoMenu: ViewModifier {
     let song: Song?
     let width: CGFloat
@@ -3264,14 +3525,17 @@ private struct MusicVideoMenu: ViewModifier {
         .tint(song?.coverMenuTint ?? .white)
     }
 
-    /// The video lives above the page: its frame stands in for it.
+    /// The video itself, carried into the menu's preview (it keeps
+    /// playing there, and on its way back), its still under it.
     @ViewBuilder private var preview: some View {
         if showsVideo, let still = musicVideo.still {
+            let size = MusicVideoPlayer.videoSize(side: width)
             Image(uiImage: still)
                 .resizable()
                 .aspectRatio(contentMode: .fill)
-                .frame(width: MusicVideoPlayer.videoSize(side: width).width, height: MusicVideoPlayer.videoSize(side: width).height)
+                .frame(width: size.width, height: size.height)
                 .clipped()
+                .overlay(MusicVideoHost(role: .flight, carriesInside: true))
         } else {
             ArtworkImage(source: song?.artworkSource, cornerRadius: 0, points: width)
                 .frame(width: width, height: width)
@@ -3334,5 +3598,27 @@ private struct LyricsNowPlayingHeader: View {
         }
         .frame(maxWidth: .infinity, alignment: .topLeading)
         .animation(.spring(duration: 0.6, bounce: 0.12), value: shows)
+    }
+}
+
+/// A server song's download, from a "…" menu: download, cancel or remove.
+struct ServerDownloadMenuItem: View {
+    let song: Song
+    @ObservedObject private var downloads = SubsonicDownloads.shared
+
+    var body: some View {
+        if song.isDownloaded {
+            Button("Remove Download", systemImage: "arrow.down.circle.dotted") {
+                downloads.removeDownloads([song])
+            }
+        } else if downloads.isPending(song) {
+            Button("Cancel Download", systemImage: "xmark.circle") {
+                downloads.cancel([song])
+            }
+        } else {
+            Button("Download", systemImage: "arrow.down.circle") {
+                downloads.download([song])
+            }
+        }
     }
 }

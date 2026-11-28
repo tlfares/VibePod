@@ -858,6 +858,18 @@ enum LyricsSingerStore {
     static func delete(for songID: UUID) {
         try? FileManager.default.removeItem(at: url(for: songID))
     }
+
+    /// The stored file as is, for iCloud Sync.
+    static func rawData(for songID: UUID) -> Data? {
+        try? Data(contentsOf: url(for: songID))
+    }
+
+    /// Another device's file, or none.
+    static func setRawData(_ data: Data?, for songID: UUID) {
+        guard let data else { return delete(for: songID) }
+        try? FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
+        try? data.write(to: url(for: songID), options: .atomic)
+    }
 }
 
 // MARK: - Auto match

@@ -1,4 +1,7 @@
 import AVFoundation
+#if targetEnvironment(macCatalyst)
+import CoreAudio
+#endif
 import NaturalLanguage
 import Speech
 import Synchronization
@@ -96,6 +99,8 @@ final class LibraryGamesViewController: UIViewController {
     final class Counts: ObservableObject {
         @Published var synced: [Song]?
         @Published var playable: [Song]?
+        /// Songs with a file on disk (Music Tiles, the Playground).
+        @Published var decodable: [Song]?
         /// Songs with lyrics, synced or not (Who Sings This?).
         @Published var lyrical: [Song]?
         var lyricalArtists = 0
@@ -115,11 +120,17 @@ final class LibraryGamesViewController: UIViewController {
 
     required init?(coder: NSCoder) { fatalError("init(coder:)") }
 
+    private static weak var current: LibraryGamesViewController?
+
+    /// A game (or its setup) is on screen: games own the playback.
+    static var isGameOnScreen: Bool { current?.presentedViewController != nil }
+
     override func viewDidLoad() {
         super.viewDidLoad()
+        Self.current = self
         title = String(localized: "Games")
         navigationItem.largeTitleDisplayMode = .always
-        view.backgroundColor = .systemBackground
+        view.backgroundColor = .pageBackground
 
         let board = UIHostingController(rootView: GamesBoard(
             songCount: songs.count,
@@ -138,14 +149,15 @@ final class LibraryGamesViewController: UIViewController {
         let songs = songs
         let counts = counts
         Task {
-            let (synced, playable, lyrical) = await Task.detached(priority: .userInitiated) {
-                (songs.filter { $0.lyricsKind == .synced }, songs.filter { $0.isExcerptPlayable }, songs.filter { $0.lyricsKind != .none })
+            let (synced, playable, decodable, lyrical) = await Task.detached(priority: .userInitiated) {
+                (songs.filter { $0.lyricsKind == .synced }, songs.filter { $0.isExcerptPlayable }, songs.filter { $0.hasDecodableAudio }, songs.filter { $0.lyricsKind != .none })
             }.value
             counts.lyricalArtists = WhoSingsSettings.artistCount(lyrical)
             withAnimation(.smooth) {
                 counts.lyrical = lyrical
                 counts.synced = synced
                 counts.playable = playable
+                counts.decodable = decodable
             }
         }
     }
@@ -168,7 +180,7 @@ final class LibraryGamesViewController: UIViewController {
             guard let lyrical = counts.lyrical, counts.lyricalArtists >= WhoSingsSettings.minimumArtists else { return }
             onLaunch(.whoSings(lyrical, difficulty: WhoSingsSettings.savedDifficulty()))
         case .musicTiles:
-            guard let playable = playableSongs, !playable.isEmpty else { return }
+            guard let playable = counts.decodable, !playable.isEmpty else { return }
             // Played over the picker, which is still there when the game
             // closes: no trip back through the Home screen.
             weak var picker: UIViewController?
@@ -195,7 +207,7 @@ final class LibraryGamesViewController: UIViewController {
     }
 
     private func presentPlayground(_ mode: PlaygroundMode) {
-        guard let playable = playableSongs else { return }
+        guard let playable = counts.decodable else { return }
         let songs: [Song]
         switch mode {
         case .aCappella:
@@ -278,8 +290,23 @@ private struct GamesBoard: View {
             }
             .padding(.horizontal, 16)
             .padding(.top, 8)
-            .padding(.bottom, 24)
+            .padding(.bottom, streamedOnly > 0 ? 8 : 24)
+
+            if streamedOnly > 0 {
+                Text("Music Tiles and the Playground read the whole song: download your server songs to play them there.")
+                    .font(.footnote)
+                    .foregroundStyle(.secondary)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .padding(.horizontal, 20)
+                    .padding(.bottom, 24)
+            }
         }
+    }
+
+    /// Server songs heard over the network only.
+    private var streamedOnly: Int {
+        guard let playable = counts.playable, let decodable = counts.decodable else { return 0 }
+        return playable.count - decodable.count
     }
 
     private func playgroundDetail(_ mode: PlaygroundMode) -> String? {
@@ -293,7 +320,7 @@ private struct GamesBoard: View {
     }
 
     private func isAvailable(_ mode: PlaygroundMode) -> Bool {
-        guard counts.playable?.isEmpty == false else { return false }
+        guard counts.decodable?.isEmpty == false else { return false }
         switch mode {
         case .aCappella: return model.isInstalled
         case .songVoice: return counts.synced?.isEmpty == false
@@ -345,7 +372,7 @@ private struct GamesBoard: View {
         case .guessLyrics: counts.synced?.isEmpty == false
         case .whatSong: (counts.playable?.count ?? 0) >= 2
         case .whoSings: counts.lyricalArtists >= WhoSingsSettings.minimumArtists
-        case .musicTiles: counts.playable?.isEmpty == false
+        case .musicTiles: counts.decodable?.isEmpty == false
         }
     }
 
@@ -353,7 +380,8 @@ private struct GamesBoard: View {
         switch game {
         case .coversSnake: String(localized: "\(songCount) playable songs")
         case .guessLyrics: counts.synced.map { String(localized: "\($0.count) songs with synced lyrics") }
-        case .whatSong, .musicTiles: counts.playable.map { String(localized: "\($0.count) playable songs") }
+        case .whatSong: counts.playable.map { String(localized: "\($0.count) playable songs") }
+        case .musicTiles: counts.decodable.map { String(localized: "\($0.count) playable songs") }
         case .whoSings: counts.lyrical.map { _ in
             counts.lyricalArtists >= WhoSingsSettings.minimumArtists
                 ? String(localized: "\(counts.lyricalArtists) artists with lyrics")
@@ -1238,7 +1266,7 @@ private struct ACappellaView: View {
             .frame(maxWidth: .infinity, maxHeight: .infinity)
         }
         .background {
-            PlayerBackgroundRepresentable(artwork: model.song.artworkSource)
+            PlayerBackgroundRepresentable(artwork: model.song.artworkSource, showsMotion: false)
                 .ignoresSafeArea()
         }
         .environment(\.colorScheme, .dark)

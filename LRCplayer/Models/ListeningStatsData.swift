@@ -82,9 +82,21 @@ final class ListeningStatsService {
     /// Posted when plays are recorded or the history is erased.
     static let historyDidChange = Notification.Name("ListeningStatsHistoryDidChange")
 
+    /// Where plays come from: VibePod's own, imported from other
+    /// services' exports, or both.
+    enum Source: Hashable, CaseIterable {
+        case all, vibePod, imported
+    }
+
     private let fileName = "listening_stats.json"
     private let settingsKey = "listeningStatsEnabled"
     private var cachedData: ListeningStatsData?
+    /// VibePod's plays with the imported ones, and the imported ones alone,
+    /// oldest first. Put together on first use.
+    private var combined: (all: [ListeningStatsEntry], imported: [ListeningStatsEntry])?
+
+    /// Everything, unless imported plays are shown separately.
+    var defaultSource: Source { ImportedHistory.showsSeparately ? .vibePod : .all }
     private let encoder = JSONEncoder()
     private let decoder = JSONDecoder()
 
@@ -129,6 +141,12 @@ final class ListeningStatsService {
     init() {
         encoder.dateEncodingStrategy = .iso8601
         decoder.dateDecodingStrategy = .iso8601
+        NotificationCenter.default.addObserver(forName: ImportedHistory.didChange, object: nil, queue: .main) { [weak self] _ in
+            MainActor.assumeIsolated {
+                self?.combined = nil
+                NotificationCenter.default.post(name: Self.historyDidChange, object: nil)
+            }
+        }
     }
 
     func setEnabled(_ enabled: Bool) {
@@ -153,6 +171,7 @@ final class ListeningStatsService {
         data.entries.append(entry)
         save(data)
         cachedData = data
+        combined?.all.append(entry)
         NotificationCenter.default.post(name: Self.historyDidChange, object: nil)
     }
 
@@ -174,6 +193,7 @@ final class ListeningStatsService {
         }
         save(data)
         cachedData = data
+        combined = nil
         NotificationCenter.default.post(name: Self.historyDidChange, object: nil)
     }
 
@@ -187,21 +207,50 @@ final class ListeningStatsService {
         data.entries.sort { $0.timestamp < $1.timestamp }
         save(data)
         cachedData = data
+        combined = nil
         NotificationCenter.default.post(name: Self.historyDidChange, object: nil)
     }
 
-    func allEntries() -> [ListeningStatsEntry] {
+    /// The plays VibePod recorded, without the imported ones (what another
+    /// device receives, what play counts start from).
+    func ownEntries() -> [ListeningStatsEntry] {
         loadOrCreate().entries
     }
 
-    func entries(in range: ListeningStatsTimeRange) -> [ListeningStatsEntry] {
-        let data = loadOrCreate()
-        let cutoff = Date().addingTimeInterval(-range.interval)
-        return data.entries.filter { $0.timestamp >= cutoff }
+    func allEntries(source: Source? = nil) -> [ListeningStatsEntry] {
+        switch source ?? defaultSource {
+        case .vibePod: ownEntries()
+        case .imported: combinedEntries().imported
+        case .all: combinedEntries().all
+        }
     }
 
-    func aggregate(for range: ListeningStatsTimeRange) -> ListeningStatsAggregated {
-        let entries = self.entries(in: range)
+    func entries(in range: ListeningStatsTimeRange, source: Source? = nil) -> [ListeningStatsEntry] {
+        let cutoff = Date().addingTimeInterval(-range.interval)
+        return allEntries(source: source).filter { $0.timestamp >= cutoff }
+    }
+
+    private func combinedEntries() -> (all: [ListeningStatsEntry], imported: [ListeningStatsEntry]) {
+        if let combined { return combined }
+        let own = ownEntries()
+        let imported = ImportedHistory.shared.entries(own: own)
+        let result = (all: imported.isEmpty ? own : (imported + own).sorted { $0.timestamp < $1.timestamp }, imported: imported)
+        combined = result
+        return result
+    }
+
+    /// The artist a play counts for, as everywhere else in the app: the
+    /// song's album artist or profile (a feat. doesn't make another artist),
+    /// the artist recorded with the play once the song is gone.
+    func artist(for entry: ListeningStatsEntry) -> String {
+        if let song = AppModel.shared.libraryService.song(withID: entry.songID) {
+            return LibraryIndex.artistName(for: song)
+        }
+        return ArtistMerges.main(for: entry.artist)
+    }
+
+    func aggregate(for range: ListeningStatsTimeRange, source: Source? = nil) -> ListeningStatsAggregated {
+        let entries = self.entries(in: range, source: source)
         guard !entries.isEmpty else { return .empty }
 
         let totalListeningTime = entries.reduce(0) { $0 + $1.durationPlayed }
@@ -222,14 +271,17 @@ final class ListeningStatsService {
 
         for entry in entries {
             // Merged profiles count for their main artist.
-            let artist = ArtistMerges.main(for: entry.artist)
+            let artist = self.artist(for: entry)
             artistCounts[artist, default: 0] += 1
             artistTime[artist, default: 0] += entry.durationPlayed
 
-            let albumKey = "\(entry.artist)|\(entry.album)"
-            albumCounts[albumKey, default: 0] += 1
-            albumTime[albumKey, default: 0] += entry.durationPlayed
-            albumArtist[albumKey] = entry.artist
+            // Some exports don't name the album.
+            if !LibraryIndex.unknownAlbumNames.contains(entry.album.trimmingCharacters(in: .whitespaces).lowercased()) {
+                let albumKey = "\(artist)|\(entry.album)"
+                albumCounts[albumKey, default: 0] += 1
+                albumTime[albumKey, default: 0] += entry.durationPlayed
+                albumArtist[albumKey] = artist
+            }
 
             let songKey = "\(entry.songID.uuidString)"
             songCounts[songKey, default: 0] += 1
@@ -286,23 +338,32 @@ final class ListeningStatsService {
         )
     }
 
+    /// VibePod's plays; imported ones are deleted with their import.
     func eraseAllData() {
         let url = fileURL
         saveQueue.async { try? FileManager.default.removeItem(at: url) }
         cachedData = ListeningStatsData()
+        combined = nil
         NotificationCenter.default.post(name: Self.historyDidChange, object: nil)
     }
 
-    /// Whether the history goes back more than a year (All Time is offered).
-    var firstRecordDate: Date? {
-        allEntries().map(\.timestamp).min()
+    var firstRecordDate: Date? { firstRecordDate(source: nil) }
+
+    func firstRecordDate(source: Source?) -> Date? {
+        let resolved = source ?? defaultSource
+        // Imported plays are kept in order; VibePod's nearly so.
+        return resolved == .vibePod ? ownEntries().map(\.timestamp).min() : allEntries(source: resolved).first?.timestamp
     }
 
-    var hasMoreThanAYear: Bool {
-        guard let first = allEntries().map(\.timestamp).min() else { return false }
+    /// Whether the history goes back more than a year (All Time is offered).
+    var hasMoreThanAYear: Bool { hasMoreThanAYear(source: nil) }
+
+    func hasMoreThanAYear(source: Source?) -> Bool {
+        guard let first = firstRecordDate(source: source) else { return false }
         return first < Date().addingTimeInterval(-ListeningStatsTimeRange.year.interval)
     }
 
+    /// Plays VibePod recorded.
     func totalEntriesCount() -> Int {
         loadOrCreate().entries.count
     }

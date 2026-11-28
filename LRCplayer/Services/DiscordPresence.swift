@@ -1,6 +1,7 @@
 import Foundation
 import Combine
 import Security
+#if !targetEnvironment(macCatalyst)
 import DiscordC
 
 /// Discord Rich Presence: "Listening to" the song playing, on the user's
@@ -12,6 +13,7 @@ final class DiscordPresence: ObservableObject {
     static let shared = DiscordPresence()
 
     static let enabledKey = "discordPresenceEnabled"
+    nonisolated static let isSupported = true
     static let applicationID: UInt64 = 1565851662101254224
 
     enum State: Equatable {
@@ -420,3 +422,26 @@ private enum DiscordKeychain {
         SecItemDelete(query as CFDictionary)
     }
 }
+
+#else
+
+/// Discord's Social SDK has no Mac Catalyst build: no Rich Presence on Mac.
+@MainActor
+final class DiscordPresence: ObservableObject {
+    static let shared = DiscordPresence()
+    static let enabledKey = "discordPresenceEnabled"
+    nonisolated static let isSupported = false
+
+    enum State: Equatable { case unlinked, linking, connecting, ready(String?), failed(String) }
+
+    @Published private(set) var state: State = .unlinked
+    var isLinked: Bool { false }
+
+    private init() {}
+
+    func refresh() {}
+    func link() {}
+    func unlink() {}
+}
+
+#endif

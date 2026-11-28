@@ -105,10 +105,11 @@ final class HeadGestures: NSObject, ObservableObject {
         isEnabled ? start() : stop()
     }
 
-    /// Half as firm at the most sensitive, half as much again at the least.
+    /// Half as firm again at the least sensitive; a bit softer (×0.81) at the most.
     func updateSensitivity() {
         let stored = UserDefaults.standard.object(forKey: Self.sensitivityKey) as? Double ?? 0.5
-        let firmness = pow(2, 0.5 - min(max(stored, 0), 1))
+        let s = min(max(stored, 0), 1)
+        let firmness = s <= 0.5 ? pow(2, 0.5 - s) : pow(2, -(s - 0.5) * 0.6)
         threshold = Self.baseThreshold * firmness
         tiltAngle = Self.baseTiltAngle * firmness
     }
@@ -188,7 +189,7 @@ final class HeadGestures: NSObject, ObservableObject {
     /// A tilt is slow, unlike a nod: read from the head's angle, not its
     /// speed. Over by this much from where the head was resting, then
     /// back up.
-    private static let baseTiltAngle = 14 * Double.pi / 180
+    private static let baseTiltAngle = 19 * Double.pi / 180
     private var tiltAngle = baseTiltAngle
     /// Where the head rests, following slowly the way it's held.
     private var rollBase: Double?
@@ -302,6 +303,8 @@ final class HeadGestures: NSObject, ObservableObject {
         lastGesture = (gesture, .now)
         let raw = UserDefaults.standard.string(forKey: gesture.storageKey) ?? ""
         let action = HeadGestureAction(rawValue: raw) ?? .none
+        // Games own the playback: only the volume stays available.
+        if LibraryGamesViewController.isGameOnScreen, action != .volumeUp, action != .volumeDown { return }
         let player = MusicPlayerService.shared
         switch action {
         case .none:

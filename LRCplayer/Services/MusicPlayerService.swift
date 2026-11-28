@@ -3,6 +3,9 @@ import MediaToolbox
 import os
 import Foundation
 import AVFoundation
+#if targetEnvironment(macCatalyst)
+import CoreAudio
+#endif
 import CoreMedia
 import MediaPlayer
 import Combine
@@ -263,7 +266,23 @@ final class MusicPlayerService: NSObject, ObservableObject {
     private static let duckedVolume: Float = 0.15
     private var isDucked = false
     var baseVolume: Float { duckVolume * VolumeLeveling.gain(for: currentSong) }
-    var duckVolume: Float { isDucked ? Self.duckedVolume : 1 }
+    var duckVolume: Float { (isDucked ? Self.duckedVolume : 1) * appVolume }
+
+    static let appVolumeKey = "appVolume"
+    /// The app's own volume, under the system's: the Mac player bar's
+    /// slider, like Music's. Always full on iPhone and iPad.
+    @Published private(set) var appVolume: Float = MacApp.isActive
+        ? UserDefaults.standard.object(forKey: MusicPlayerService.appVolumeKey) as? Float ?? 1
+        : 1
+
+    func setAppVolume(_ volume: Float) {
+        let volume = min(1, max(0, volume))
+        guard volume != appVolume else { return }
+        appVolume = volume
+        UserDefaults.standard.set(volume, forKey: Self.appVolumeKey)
+        guard mix == nil, !isMixingIn else { return } // the mix ramp picks it up
+        applyOutputVolume(baseVolume)
+    }
 
     /// The current song's level is known (or the setting moved): heard now.
     func refreshVolumeLeveling() {
@@ -348,7 +367,7 @@ final class MusicPlayerService: NSObject, ObservableObject {
         handlePlaybackFinished()
     }
 
-    private func applyOutputVolume(_ volume: Float, fade: TimeInterval = 0) {
+    fileprivate func applyOutputVolume(_ volume: Float, fade: TimeInterval = 0) {
         outputVolume = volume
         let heard = stageIsAudible || videoIsAudible ? 0 : volume
         if fade > 0 {
@@ -497,9 +516,15 @@ final class MusicPlayerService: NSObject, ObservableObject {
         for _ in 0..<queue.count {
             let song = queue[currentIndex]
             tearDownPlayers()
-            let started = song.isMediaLibraryItem
-                ? playMediaLibrarySong(song, from: savedTime)
-                : playFile(song, from: savedTime)
+            let started: Bool
+            if song.isMediaLibraryItem {
+                started = playMediaLibrarySong(song, from: savedTime)
+            } else if song.isRemote, !song.isDownloaded {
+                started = SubsonicService.shared.streamURL(for: song)
+                    .map { playMediaLibrarySong(song, from: savedTime, url: $0) } ?? false
+            } else {
+                started = playFile(song, from: savedTime)
+            }
             if started {
                 if let failedTitle { reportError(String(localized: "Couldn't play “\(failedTitle)”")) }
                 return
@@ -631,6 +656,7 @@ final class MusicPlayerService: NSObject, ObservableObject {
     }
 
     private func didStartPlaying() {
+        if let currentSong { SubsonicService.shared.songDidStart(currentSong) }
         SingAlong.shared.playerDidChange()
         prepareAutoMix()
         startStateSaveTimer()
@@ -1072,29 +1098,6 @@ final class MusicPlayerService: NSObject, ObservableObject {
         MPNowPlayingInfoCenter.default().playbackState = currentSong == nil ? .stopped : (isPlaying ? .playing : .paused)
     }
 
-    /// iOS's own video player (a music video full screen) takes the system
-    /// player while it shows, and leaves it greyed out: ours again, every
-    /// control on.
-    func reclaimNowPlaying() {
-        try? AVAudioSession.sharedInstance().setActive(true)
-        let center = MPRemoteCommandCenter.shared()
-        // It drops every handler as it leaves (ours too) and leaves its
-        // ±10 s buttons in place of previous and next.
-        let ours = [center.playCommand, center.pauseCommand, center.togglePlayPauseCommand,
-                    center.nextTrackCommand, center.previousTrackCommand, center.changePlaybackPositionCommand,
-                    center.seekForwardCommand, center.seekBackwardCommand]
-        for command in ours {
-            command.removeTarget(nil)
-            command.isEnabled = true
-        }
-        for command in [center.skipForwardCommand, center.skipBackwardCommand] {
-            command.removeTarget(nil)
-            command.isEnabled = false
-        }
-        setupRemoteCommandCenter()
-        updateNowPlayingInfo()
-    }
-
     /// Republishes the Now Playing info, with or without the ISRC.
     func refreshNowPlayingInfo() {
         updateNowPlayingInfo()
@@ -1181,6 +1184,8 @@ extension MusicPlayerService {
         plannedPair = nil
         guard autoMixEnabled, let from = currentSong, let index = upcomingIndex else { return }
         let to = queue[index]
+        // Mixing reads both files: streamed songs just follow each other.
+        guard from.hasLocalAudio, to.hasLocalAudio else { return }
         let options = AutoMixOptions.current
         plannedPair = (from.id, to.id, options.signature)
         let outDuration = outroCutoff.flatMap { $0.songID == from.id ? min(duration, $0.time) : nil } ?? duration
@@ -1425,7 +1430,7 @@ enum VolumeLeveling {
     }
 
     @MainActor static func measureIfNeeded(_ song: Song) {
-        guard isOn, levels[song.id.uuidString] == nil, !measuring.contains(song.id) else { return }
+        guard isOn, song.hasLocalAudio, levels[song.id.uuidString] == nil, !measuring.contains(song.id) else { return }
         measuring.insert(song.id)
         let url = song.isMediaLibraryItem ? song.fileURL : song.playableFileURL
         let id = song.id
@@ -1668,5 +1673,25 @@ final class EqualizerTapContext: @unchecked Sendable {
         setup = vDSP_biquad_CreateSetup(coefficients, vDSP_Length(Self.bands))
         preGain = snapshot.preGain
         limits = snapshot.limits
+    }
+}
+
+// MARK: - Program sleep timer
+
+extension MusicPlayerService {
+    /// Lowers the volume to silence, then pauses and puts the volume back
+    /// for the next play.
+    func fadeOutAndPause(over duration: TimeInterval) async {
+        guard isPlaying else { return }
+        let steps = 30
+        let start = outputVolume
+        for step in 1...steps {
+            try? await Task.sleep(for: .seconds(duration / Double(steps)))
+            guard !Task.isCancelled, isPlaying else { break }
+            let left = 1 - Double(step) / Double(steps)
+            applyOutputVolume(Float(Double(start) * left * left), fade: duration / Double(steps))
+        }
+        if isPlaying { pause() }
+        applyOutputVolume(baseVolume)
     }
 }

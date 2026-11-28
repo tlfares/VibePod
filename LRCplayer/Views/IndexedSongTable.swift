@@ -2,271 +2,6 @@ import SwiftUI
 import UIKit
 import Combine
 
-/// Alphabetical song list with the A–Z index, backed by UITableView so even
-/// very large libraries scroll at full frame rate.
-struct IndexedSongTable: UIViewControllerRepresentable {
-    let songs: [Song]
-    let sortMode: SongListSortMode
-    var showsPlayButtons = true
-    // Not observed: the table tracks playback itself, so a track change must
-    // not re-run `update` (and re-sort the whole list).
-    @Environment(\.appServices) private var services
-
-    func makeUIViewController(context: Context) -> IndexedSongTableViewController {
-        IndexedSongTableViewController(libraryVM: services.libraryVM, playerVM: services.playerVM, router: services.router)
-    }
-
-    func updateUIViewController(_ controller: IndexedSongTableViewController, context: Context) {
-        controller.update(songs: songs, sortMode: sortMode, showsPlayButtons: showsPlayButtons)
-    }
-}
-
-final class IndexedSongTableViewController: UITableViewController {
-    private struct Section {
-        let title: String
-        let songs: [Song]
-    }
-
-    private let libraryVM: LibraryViewModel
-    private let playerVM: PlayerViewModel
-    private let router: AppRouter
-    private var sections: [Section] = []
-    private var orderedSongs: [Song] = []
-    private var renderedToken: Int?
-    private var cancellables = Set<AnyCancellable>()
-    private lazy var header = SongListHeaderView(
-        onPlay: { [weak self] in self?.play(shuffled: false) },
-        onShuffle: { [weak self] in self?.play(shuffled: true) }
-    )
-
-    init(libraryVM: LibraryViewModel, playerVM: PlayerViewModel, router: AppRouter) {
-        self.libraryVM = libraryVM
-        self.playerVM = playerVM
-        self.router = router
-        super.init(style: .plain)
-    }
-
-    required init?(coder: NSCoder) { fatalError("init(coder:)") }
-
-    override func viewDidLoad() {
-        super.viewDidLoad()
-        tableView.backgroundColor = .systemBackground
-        tableView.rowHeight = 60
-        tableView.separatorInset = UIEdgeInsets(top: 0, left: 76, bottom: 0, right: 0)
-        tableView.sectionHeaderTopPadding = 0
-        tableView.keyboardDismissMode = .onDrag
-        tableView.sectionIndexColor = AppTint.current.uiColor
-        tableView.sectionIndexBackgroundColor = .clear
-        tableView.register(SongTableCell.self, forCellReuseIdentifier: SongTableCell.reuseID)
-
-        playerVM.$currentSong.map { $0?.id }.removeDuplicates()
-            .combineLatest(playerVM.$isPlaying.removeDuplicates())
-            .dropFirst()
-            .receive(on: DispatchQueue.main) // after willSet: the sink reads the model
-            .sink { [weak self] _ in self?.refreshVisibleCells() }
-            .store(in: &cancellables)
-
-        NotificationCenter.default.publisher(for: AppTint.didChangeNotification)
-            .sink { [weak self] _ in
-                self?.tableView.sectionIndexColor = AppTint.current.uiColor
-                self?.header.applyTint()
-                self?.refreshVisibleCells()
-            }
-            .store(in: &cancellables)
-    }
-
-    override func viewWillAppear(_ animated: Bool) {
-        super.viewWillAppear(animated)
-        adoptAsContentScrollView(tableView)
-    }
-
-    override func viewDidLayoutSubviews() {
-        super.viewDidLayoutSubviews()
-        sizeHeaderIfNeeded()
-    }
-
-    func update(songs: [Song], sortMode: SongListSortMode, showsPlayButtons: Bool) {
-        let desiredHeader: UIView? = showsPlayButtons && !songs.isEmpty ? header : nil
-        if tableView.tableHeaderView !== desiredHeader {
-            tableView.tableHeaderView = desiredHeader
-        }
-
-        // Cheap content token: re-sort and reload only when something shown
-        // actually changed.
-        var hasher = Hasher()
-        hasher.combine(sortMode)
-        for song in songs {
-            hasher.combine(song.id)
-            hasher.combine(song.title)
-            hasher.combine(song.artist)
-            hasher.combine(song.album)
-            hasher.combine(song.lrcFilePath)
-        }
-        let token = hasher.finalize()
-        guard token != renderedToken else { return }
-        renderedToken = token
-        orderedSongs = Self.sorted(songs, by: sortMode)
-        sections = Self.sections(for: orderedSongs, sortMode: sortMode)
-        tableView.reloadData()
-    }
-
-    /// Width and text size the header was last measured for: layout runs on
-    /// every scroll frame, the height only follows those two.
-    private var sizedHeaderFor: (CGFloat, UIContentSizeCategory)?
-
-    private func sizeHeaderIfNeeded() {
-        guard tableView.tableHeaderView === header else { return }
-        let width = tableView.bounds.width
-        let category = traitCollection.preferredContentSizeCategory
-        if let sized = sizedHeaderFor, sized.0 == width, sized.1 == category, abs(header.frame.width - width) <= 0.5 { return }
-        sizedHeaderFor = (width, category)
-        let height = header.systemLayoutSizeFitting(
-            CGSize(width: width, height: UIView.layoutFittingCompressedSize.height),
-            withHorizontalFittingPriority: .required,
-            verticalFittingPriority: .fittingSizeLevel
-        ).height
-        guard abs(header.frame.width - width) > 0.5 || abs(header.frame.height - height) > 0.5 else { return }
-        header.frame = CGRect(x: 0, y: 0, width: width, height: height)
-        tableView.tableHeaderView = header
-    }
-
-    private func play(shuffled: Bool) {
-        playerVM.play(orderedSongs, shuffled: shuffled)
-    }
-
-    private func refreshVisibleCells() {
-        for indexPath in tableView.indexPathsForVisibleRows ?? [] {
-            guard let cell = tableView.cellForRow(at: indexPath) as? SongTableCell,
-                  let song = song(at: indexPath) else { continue }
-            configure(cell, with: song)
-        }
-    }
-
-    private func song(at indexPath: IndexPath) -> Song? {
-        guard sections.indices.contains(indexPath.section),
-              sections[indexPath.section].songs.indices.contains(indexPath.row) else { return nil }
-        return sections[indexPath.section].songs[indexPath.row]
-    }
-
-    private func configure(_ cell: SongTableCell, with song: Song) {
-        let isCurrent = playerVM.currentSong?.id == song.id
-        cell.configure(
-            song: song,
-            isCurrent: isCurrent,
-            isPlaying: isCurrent && playerVM.isPlaying,
-            lyricsBadge: LyricsBadge.image(for: song.lyricsKind)
-        )
-    }
-
-    // MARK: Sorting
-
-    private static func sorted(_ songs: [Song], by sortMode: SongListSortMode) -> [Song] {
-        songs.sorted { lhs, rhs in
-            let keys: [(String, String)] = sortMode == .title
-                ? [(lhs.title, rhs.title), (lhs.artist, rhs.artist), (lhs.album, rhs.album)]
-                : [(lhs.artist, rhs.artist), (lhs.album, rhs.album), (lhs.title, rhs.title)]
-            for (left, right) in keys {
-                let order = left.libraryCompare(right)
-                if order != .orderedSame { return order == .orderedAscending }
-            }
-            return false
-        }
-    }
-
-    private static func sections(for songs: [Song], sortMode: SongListSortMode) -> [Section] {
-        var result: [Section] = []
-        var currentTitle: String?
-        var bucket: [Song] = []
-        for song in songs {
-            let title = sectionTitle(for: sortMode == .title ? song.title : song.artist)
-            if title != currentTitle, let currentTitle {
-                result.append(Section(title: currentTitle, songs: bucket))
-                bucket = []
-            }
-            currentTitle = title
-            bucket.append(song)
-        }
-        if let currentTitle { result.append(Section(title: currentTitle, songs: bucket)) }
-        return result
-    }
-
-    private static func sectionTitle(for value: String) -> String {
-        // Same grouping as the sort, so "#" is one section at the top.
-        guard value.librarySortGroup != 0 else { return "#" }
-        let folded = value.trimmingCharacters(in: .whitespacesAndNewlines)
-            .folding(options: [.diacriticInsensitive, .caseInsensitive], locale: nil)
-        guard let first = folded.first else { return "#" }
-        return String(first).uppercased()
-    }
-
-    // MARK: Data source
-
-    override func numberOfSections(in tableView: UITableView) -> Int {
-        sections.count
-    }
-
-    override func tableView(_ tableView: UITableView, numberOfRowsInSection section: Int) -> Int {
-        sections[section].songs.count
-    }
-
-    override func tableView(_ tableView: UITableView, cellForRowAt indexPath: IndexPath) -> UITableViewCell {
-        let cell = tableView.dequeueReusableCell(withIdentifier: SongTableCell.reuseID, for: indexPath) as! SongTableCell
-        if let song = song(at: indexPath) {
-            configure(cell, with: song)
-        }
-        return cell
-    }
-
-    /// Letter headers, like Apple Music's Songs list: bold, at the page margin.
-    override func tableView(_ tableView: UITableView, viewForHeaderInSection section: Int) -> UIView? {
-        guard sections.count > 1 else { return nil }
-        let header = tableView.dequeueReusableHeaderFooterView(withIdentifier: Self.headerID) ?? UITableViewHeaderFooterView(reuseIdentifier: Self.headerID)
-        var content = UIListContentConfiguration.plainHeader()
-        content.text = sections[section].title
-        content.textProperties.font = .preferredFont(forTextStyle: .headline)
-        content.textProperties.color = .label
-        content.directionalLayoutMargins = NSDirectionalEdgeInsets(top: 6, leading: 20, bottom: 6, trailing: 20)
-        header.contentConfiguration = content
-        return header
-    }
-
-    override func tableView(_ tableView: UITableView, heightForHeaderInSection section: Int) -> CGFloat {
-        sections.count > 1 ? UITableView.automaticDimension : 0
-    }
-
-    private static let headerID = "SongLetterHeader"
-
-    override func sectionIndexTitles(for tableView: UITableView) -> [String]? {
-        sections.count > 1 ? sections.map(\.title) : nil
-    }
-
-    override func tableView(_ tableView: UITableView, sectionForSectionIndexTitle title: String, at index: Int) -> Int {
-        index
-    }
-
-    override func tableView(_ tableView: UITableView, didSelectRowAt indexPath: IndexPath) {
-        tableView.deselectRow(at: indexPath, animated: true)
-        guard let song = song(at: indexPath) else { return }
-        playerVM.play(song: song, from: orderedSongs)
-    }
-
-    override func tableView(_ tableView: UITableView, leadingSwipeActionsConfigurationForRowAt indexPath: IndexPath) -> UISwipeActionsConfiguration? {
-        song(at: indexPath).map { SongMenuBuilder.queueSwipeAction(for: $0, playerVM: playerVM) }
-    }
-
-    override func tableView(_ tableView: UITableView, trailingSwipeActionsConfigurationForRowAt indexPath: IndexPath) -> UISwipeActionsConfiguration? {
-        UISwipeActionsConfiguration(actions: [])
-    }
-
-    override func tableView(_ tableView: UITableView, contextMenuConfigurationForRowAt indexPath: IndexPath, point: CGPoint) -> UIContextMenuConfiguration? {
-        guard let song = song(at: indexPath) else { return nil }
-        return fixedContextMenu(identifier: song.id as NSUUID, previewProvider: nil) { [weak self] _ in
-            guard let self else { return nil }
-            return SongMenuBuilder.menu(for: song, libraryVM: self.libraryVM, playerVM: self.playerVM, router: self.router)
-        }
-    }
-}
-
 /// "Play" / "Shuffle" glass capsules above a song list.
 final class SongListHeaderView: UIView {
     private let onPlay: () -> Void
@@ -343,6 +78,7 @@ final class SongTableCell: UITableViewCell {
     private let subtitleLabel = UILabel()
     private let accessoryStack = UIStackView()
     private let lyricsBadgeView = UIImageView()
+    private let downloadBadge = DownloadBadgeView(tint: .tertiaryLabel)
     private let nowPlayingView = UIImageView()
     private let artworkLoader = ArtworkImageLoader()
     private static let placeholder = UIImage(systemName: "music.note")
@@ -385,6 +121,7 @@ final class SongTableCell: UITableViewCell {
         accessoryStack.axis = .horizontal
         accessoryStack.spacing = 6
         accessoryStack.alignment = .center
+        accessoryStack.addArrangedSubview(downloadBadge)
         accessoryStack.addArrangedSubview(lyricsBadgeView)
         accessoryStack.addArrangedSubview(nowPlayingView)
         accessoryStack.translatesAutoresizingMaskIntoConstraints = false
@@ -423,6 +160,7 @@ final class SongTableCell: UITableViewCell {
         subtitleLabel.text = subtitle ?? song.artist
         lyricsBadgeView.image = lyricsBadge
         lyricsBadgeView.isHidden = lyricsBadge == nil || isCurrent
+        downloadBadge.configure(song: song)
         NowPlayingIndicator.apply(to: nowPlayingView, isCurrent: isCurrent, isPlaying: isPlaying, tint: tint)
     }
 }

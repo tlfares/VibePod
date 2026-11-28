@@ -4,7 +4,15 @@ import UIKit
 
 enum WidgetAppGroup {
     static let id = "group.com.fares.lrc.player"
-    static var defaults: UserDefaults? { UserDefaults(suiteName: id) }
+    /// No widget on Mac, and a group container the app isn't entitled to
+    /// makes macOS ask for access to other apps' data.
+    static var defaults: UserDefaults? {
+        #if targetEnvironment(macCatalyst)
+        nil
+        #else
+        UserDefaults(suiteName: id)
+        #endif
+    }
 }
 
 enum WidgetKind {
@@ -35,7 +43,10 @@ enum WidgetStateStore {
     private static let fileName = "now-playing.json"
 
     private static var directoryURL: URL? {
-        FileManager.default.containerURL(forSecurityApplicationGroupIdentifier: WidgetAppGroup.id)?
+        #if targetEnvironment(macCatalyst)
+        return nil
+        #endif
+        return FileManager.default.containerURL(forSecurityApplicationGroupIdentifier: WidgetAppGroup.id)?
             .appendingPathComponent("Library", isDirectory: true)
             .appendingPathComponent("Application Support", isDirectory: true)
             .appendingPathComponent(directoryName, isDirectory: true)

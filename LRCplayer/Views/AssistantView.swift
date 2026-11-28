@@ -66,11 +66,15 @@ struct AssistantView: View {
     /// Shown as a tab's page rather than a sheet: no close button, and voice
     /// opens in its own sheet over it.
     private let isTab: Bool
+    /// Room left under the input bar for a floating player (the tab's page
+    /// hosts its own navigation stack, which drops padding from outside).
+    private let bottomInset: CGFloat
 
     private static let voiceDetent = PresentationDetent.height(400)
 
-    init(mode: AssistantMode, isTab: Bool = false) {
+    init(mode: AssistantMode, isTab: Bool = false, bottomInset: CGFloat = 0) {
         self.isTab = isTab
+        self.bottomInset = bottomInset
         _detent = State(initialValue: mode == .voice ? Self.voiceDetent : .large)
         _mode = State(initialValue: mode)
     }
@@ -91,6 +95,8 @@ struct AssistantView: View {
                 }
             }
             .animation(.smooth(duration: 0.4), value: mode)
+            .safeAreaPadding(.bottom, bottomInset)
+            .animation(.smooth(duration: 0.35), value: bottomInset)
             .background { AssistantBackdrop(isVoice: mode == .voice) }
             .toolbar { toolbar }
             .navigationTitle(mode == .text ? "Assistant" : "")
@@ -556,7 +562,7 @@ private struct MessageRow: View {
             UIPasteboard.general.string = message.text
         }
         if assistant.waitingID == message.id {
-            Button(french ? "Annuler la demande" : "Cancel Request", systemImage: "xmark.circle", role: .destructive) {
+            Button(french ? "Annuler la demande" : "Cancel Request", destructiveImage: "xmark.circle") {
                 withAnimation(.smooth) { assistant.delete(message.id) }
             }
         } else {
@@ -564,7 +570,7 @@ private struct MessageRow: View {
                 onEdit(message)
             }
             .disabled(assistant.isWorking)
-            Button(french ? "Supprimer" : "Delete", systemImage: "trash", role: .destructive) {
+            Button(french ? "Supprimer" : "Delete", destructiveImage: "trash") {
                 withAnimation(.smooth) { assistant.delete(message.id) }
             }
         }
@@ -778,11 +784,141 @@ private struct InputBarButton: View {
 
 /// The empty chat: a greeting and a few things to ask, each
 /// shown as a quiet tile.
+/// Offered while AI Features are off: a key (Groq's is free, Mistral's
+/// needs a plan), pasted here, turns them on without a trip to Settings.
+private struct AIKeyCard: View {
+    /// Apple Intelligence already answers: the key adds, it doesn't unlock.
+    let canAnswer: Bool
+    /// Keeps Apple's model (Automatic already uses it first) and closes the card.
+    let useApple: () -> Void
+
+    @State private var provider: AIProvider = .groq
+    @State private var draftKey = ""
+    @State private var isChecking = false
+    @State private var keyError: String?
+    @FocusState private var isKeyFocused: Bool
+
+    private var trimmed: String { draftKey.trimmingCharacters(in: .whitespacesAndNewlines) }
+
+    var body: some View {
+        let french = AssistantService.prefersFrench
+        VStack(alignment: .leading, spacing: 12) {
+            HStack(spacing: 10) {
+                Image(systemName: "key.fill")
+                    .font(.subheadline.weight(.semibold))
+                    .foregroundStyle(Color.aiTint)
+                    .frame(width: 32, height: 32)
+                    .glassEffect(.regular.tint(Color.aiTint.opacity(0.25)), in: .circle)
+                Text(french ? "Clé d’API" : "API Key")
+                    .font(.headline)
+            }
+            Text(canAnswer
+                 ? (french ? "Ajoutez une clé Groq ou Mistral pour des réponses plus complètes, et pour les autres fonctions IA." : "Add a Groq or Mistral key for fuller answers, and for the other AI features.")
+                 : (french ? "L’Assistant a besoin d’une clé Groq ou Mistral. Elle active aussi les autres fonctions IA." : "The assistant needs a Groq or Mistral key. It turns on the other AI features too."))
+                .font(.subheadline)
+                .foregroundStyle(.secondary)
+                .fixedSize(horizontal: false, vertical: true)
+            Picker(french ? "Fournisseur" : "Provider", selection: $provider) {
+                ForEach(AIProvider.allCases) { Text($0.name).tag($0) }
+            }
+            .pickerStyle(.segmented)
+            .onChange(of: provider) {
+                draftKey = ""
+                keyError = nil
+            }
+            Text(provider == .groq
+                 ? (french ? "Gratuit, avec des limites quotidiennes." : "Free, with daily limits.")
+                 : (french ? "Nécessite un forfait API chez Mistral." : "Needs an API plan on Mistral's side."))
+                .font(.footnote)
+                .foregroundStyle(.secondary)
+                .contentTransition(.opacity)
+            HStack(spacing: 10) {
+                SecureField(french ? "Collez votre clé" : "Paste your key", text: $draftKey)
+                    .textContentType(.password)
+                    .autocorrectionDisabled()
+                    .textInputAutocapitalization(.never)
+                    .focused($isKeyFocused)
+                    .submitLabel(.done)
+                    .onSubmit(save)
+                    .onChange(of: draftKey) { keyError = nil }
+                    .padding(.horizontal, 14)
+                    .padding(.vertical, 11)
+                    .background(Color.primary.opacity(0.08), in: .rect(cornerRadius: 14))
+                Button(action: save) {
+                    if isChecking {
+                        ProgressView()
+                    } else {
+                        Text(french ? "OK" : "Save").fontWeight(.semibold)
+                    }
+                }
+                .buttonStyle(.glassProminent)
+                .tint(Color.aiTint)
+                .disabled(trimmed.isEmpty || isChecking)
+            }
+            if let keyError {
+                Text(keyError)
+                    .font(.footnote)
+                    .foregroundStyle(.red)
+            }
+            Link(destination: provider.keysPage) {
+                Label(french ? "Obtenir une clé sur \(provider.consoleHost)" : "Get a key on \(provider.consoleHost)", systemImage: "arrow.up.right.square")
+                    .font(.subheadline.weight(.medium))
+            }
+            .tint(Color.aiTint)
+            .id(provider)
+            if AssistantEngines.appleUnavailableReason == nil {
+                Divider()
+                Button(action: useApple) {
+                    Label(french ? "Utiliser le modèle d’Apple" : "Use Apple's Model", systemImage: "apple.intelligence")
+                        .frame(maxWidth: .infinity)
+                        .padding(.vertical, 2)
+                }
+                .buttonStyle(.glass)
+                Text(french ? "Privé et gratuit, sur cet appareil. Vous pourrez ajouter une clé plus tard dans Fonctions IA." : "Private and free, on this device. You can add a key later in AI Features.")
+                    .font(.footnote)
+                    .foregroundStyle(.secondary)
+            }
+        }
+        .padding(20)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .glassEffect(.regular, in: .rect(cornerRadius: 28))
+        .animation(.smooth, value: provider)
+    }
+
+    /// Kept once the provider accepts it; then it becomes the provider and
+    /// AI Features turn on.
+    private func save() {
+        let key = trimmed
+        guard !key.isEmpty, !isChecking else { return }
+        isChecking = true
+        keyError = nil
+        let provider = provider
+        Task {
+            do {
+                try await MistralClient.validate(key: key, provider: provider)
+                AIProvider.current = provider
+                AIFeatures.setKey(key, for: provider)
+                AIFeatures.isEnabled = true
+                isKeyFocused = false
+            } catch MistralError.invalidKey {
+                keyError = AssistantService.prefersFrench
+                    ? "\(provider.name) n’a pas accepté cette clé. Copiez-la à nouveau depuis \(provider.consoleHost)."
+                    : "\(provider.name) didn't accept this key. Copy it again from \(provider.consoleHost)."
+            } catch {
+                keyError = error.localizedDescription
+            }
+            isChecking = false
+        }
+    }
+}
+
 private struct AssistantHome: View {
     let canAnswer: Bool
     let onPick: (String) -> Void
 
     @State private var ideas: [Idea] = []
+    @State private var aiAvailable = AIFeatures.isAvailable
+    @AppStorage("assistantKeyCardDismissed") private var keyCardDismissed = false
 
     struct Idea: Identifiable {
         let id: String
@@ -805,7 +941,10 @@ private struct AssistantHome: View {
                     .fixedSize(horizontal: false, vertical: true)
             }
 
-            if !canAnswer {
+            if !aiAvailable, !keyCardDismissed {
+                AIKeyCard(canAnswer: canAnswer) { withAnimation(.smooth) { keyCardDismissed = true } }
+                    .transition(.opacity.combined(with: .scale(scale: 0.97)))
+            } else if !canAnswer {
                 Label(AssistantEngines.appleUnavailableReason ?? "", systemImage: "exclamationmark.triangle.fill")
                     .font(.footnote)
                     .foregroundStyle(.orange)
@@ -825,6 +964,9 @@ private struct AssistantHome: View {
         .padding(.top, 24)
         .frame(maxWidth: .infinity, alignment: .leading)
         .onAppear { if ideas.isEmpty { ideas = Self.ideas() } }
+        .onReceive(NotificationCenter.default.publisher(for: AIFeatures.didChangeNotification)) { _ in
+            withAnimation(.smooth) { aiAvailable = AIFeatures.isAvailable }
+        }
     }
 
     private static var greeting: String {
@@ -914,7 +1056,8 @@ private struct PressableCardStyle: ButtonStyle {
 /// sits in the music like the rest of the app.
 private struct AssistantBackdrop: View {
     let isVoice: Bool
-    @State private var tint: Color?
+    /// The cover's colour from the first frame, not faded in after.
+    @State private var tint: Color? = MusicPlayerService.shared.currentSong?.coverTint
 
     var body: some View {
         LinearGradient(
@@ -924,7 +1067,7 @@ private struct AssistantBackdrop: View {
         )
         .ignoresSafeArea()
         .animation(.smooth(duration: 0.6), value: tint)
-        .onReceive(MusicPlayerService.shared.$currentSong.removeDuplicates { $0?.id == $1?.id }) { song in
+        .onReceive(MusicPlayerService.shared.$currentSong.removeDuplicates { $0?.id == $1?.id }.dropFirst()) { song in
             tint = song?.coverTint
         }
     }
@@ -1138,9 +1281,9 @@ struct AssistantSettingsCard: View {
 
     private var engineSummary: LocalizedStringResource {
         switch engine {
-        case .automatic: "Apple Intelligence first, Mistral as a backup."
+        case .automatic: "Apple Intelligence first, \(AIProvider.current.name) as a backup."
         case .apple: AssistantEngines.appleUnavailableReason == nil ? "On this iPhone: private and free." : "Not available on this iPhone."
-        case .mistral: AIFeatures.isAvailable ? "Mistral's larger models, with your key." : "Needs AI Features and a Mistral key."
+        case .mistral: AIFeatures.isAvailable ? "\(AIProvider.current.name)'s larger models, with your key." : "Needs AI Features and a \(AIProvider.current.name) key."
         }
     }
 }
@@ -1205,12 +1348,12 @@ private struct AssistantTipsView: View {
             symbol: "text.quote",
             color: .tileShade(hue: 0.73),
             title: "Know What Songs Are About",
-            detail: "Mistral sums up each song's lyrics in one sentence, so the assistant finds a song by its subject and builds mixes around a theme. Visible and editable in the song's Info.",
+            detail: "\(AIProvider.current.name) sums up each song's lyrics in one sentence, so the assistant finds a song by its subject and builds mixes around a theme. Visible and editable in the song's Info.",
             status: withLyrics.isEmpty ? String(localized: "No song has lyrics yet.") : String(localized: "\(summarized) of \(withLyrics.count) songs with lyrics summed up."),
             isDone: !withLyrics.isEmpty && pending == 0
         ) {
             if !AIFeatures.isAvailable {
-                Text("Needs a Mistral key in AI Features.")
+                Text("Needs a \(AIProvider.current.name) key in AI Features.")
                     .font(.footnote)
                     .foregroundStyle(.secondary)
                 Button("Open AI Features") { openSettings(.ai) }
@@ -1218,7 +1361,7 @@ private struct AssistantTipsView: View {
             } else if summaries.isRunning {
                 ProgressView(value: Double(summaries.done), total: Double(max(summaries.total, 1)))
                 HStack {
-                    (summaries.isWaiting ? Text("Mistral asked to slow down. Resuming shortly…") : Text("\(summaries.done) of \(summaries.total)"))
+                    (summaries.isWaiting ? Text("\(AIProvider.current.name) asked to slow down. Resuming shortly…") : Text("\(summaries.done) of \(summaries.total)"))
                         .font(.footnote)
                         .monospacedDigit()
                         .foregroundStyle(.secondary)
@@ -1235,7 +1378,7 @@ private struct AssistantTipsView: View {
                         .frame(maxWidth: .infinity)
                 }
                 .buttonStyle(.glassProminent)
-                Text("About \(Int((Double(pending) / Double(LyricsSummaries.batchSize)).rounded(.up))) requests with your Mistral key.")
+                Text("About \(Int((Double(pending) / Double(LyricsSummaries.batchSize)).rounded(.up))) requests with your \(AIProvider.current.name) key.")
                     .font(.footnote)
                     .foregroundStyle(.secondary)
             }
@@ -1532,7 +1675,7 @@ private struct LyricsSummaryEditor: View {
                     .lineLimit(3...8)
                     .focused($focused)
             } footer: {
-                Text("What the assistant reads about this song. Once edited, Mistral never rewrites it.")
+                Text("What the assistant reads about this song. Once edited, \(AIProvider.current.name) never rewrites it.")
             }
             Section {
                 Button("Delete Summary", role: .destructive) {
@@ -1541,7 +1684,7 @@ private struct LyricsSummaryEditor: View {
                     dismiss()
                 }
             } footer: {
-                Text("Mistral writes a new one the next time songs are summed up.")
+                Text("\(AIProvider.current.name) writes a new one the next time songs are summed up.")
             }
         }
         .navigationTitle("Summary")

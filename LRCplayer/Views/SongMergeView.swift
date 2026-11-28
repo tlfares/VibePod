@@ -108,7 +108,7 @@ struct SongMergeView: View {
                 Button("Edit…", systemImage: "slider.horizontal.3") {
                     editing = MergeEditorRequest(merge: merge)
                 }
-                Button("Unmerge", systemImage: "arrow.triangle.branch", role: .destructive) {
+                Button("Unmerge", destructiveImage: "arrow.triangle.branch") {
                     unmerging = merge
                 }
             } label: {
@@ -124,7 +124,7 @@ struct SongMergeView: View {
         .glassEffect(.regular, in: .rect(cornerRadius: 24))
         .contextMenu {
             Button("Edit…", systemImage: "slider.horizontal.3") { editing = MergeEditorRequest(merge: merge) }
-            Button("Unmerge", systemImage: "arrow.triangle.branch", role: .destructive) { unmerging = merge }
+            Button("Unmerge", destructiveImage: "arrow.triangle.branch") { unmerging = merge }
         }
     }
 

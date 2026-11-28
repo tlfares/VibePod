@@ -16,7 +16,7 @@ final class MusicHapticsService {
     /// Apple's haptic tracks, played by iOS itself; exclusive with ours.
     static let appleStorageKey = "musicHapticsApple"
 
-    static var isSupported: Bool { CHHapticEngine.capabilitiesForHardware().supportsHaptics }
+    nonisolated static var isSupported: Bool { CHHapticEngine.capabilitiesForHardware().supportsHaptics }
 
     private let player = MusicPlayerService.shared
     private var engine: CHHapticEngine?
@@ -93,10 +93,32 @@ final class MusicHapticsService {
         let url = song.isMediaLibraryItem ? song.fileURL : song.playableFileURL
         guard url.scheme != "media-library" else { return }
         let lyricsURL = AppModel.shared.libraryService.resolvedLyricsURL(for: song)
+        // A streamed song: its file is fetched for the analysis only, then
+        // dropped (the analysis is cached), so it doesn't fill the storage.
+        let remoteURL = song.isRemote && !song.isDownloaded
+            ? song.remoteID.flatMap { SubsonicService.shared.downloadURL(for: $0) } : nil
         analysisTask = Task { [weak self] in
-            let (analysis, vocals) = await Task.detached(priority: .utility) {
-                let analysis = HapticAnalyzer.cachedAnalysis(for: id) ?? HapticAnalyzer.analyze(url: url, songID: id)
-                return (analysis, lyricsURL.flatMap { VocalTimeline(songID: id, lyricsURL: $0) })
+            var analysis = await Task.detached(priority: .utility) { HapticAnalyzer.cachedAnalysis(for: id) }.value
+            if analysis == nil {
+                var source = url
+                var temporary: URL?
+                if let remoteURL {
+                    guard let (file, response) = try? await URLSession.shared.download(from: remoteURL) else { return }
+                    let named = file.deletingPathExtension().appendingPathExtension(url.pathExtension)
+                    try? FileManager.default.moveItem(at: file, to: named)
+                    temporary = named
+                    guard (response as? HTTPURLResponse)?.statusCode == 200, !Task.isCancelled else {
+                        try? FileManager.default.removeItem(at: named)
+                        return
+                    }
+                    source = named
+                }
+                let file = source
+                analysis = await Task.detached(priority: .utility) { HapticAnalyzer.analyze(url: file, songID: id) }.value
+                if let temporary { try? FileManager.default.removeItem(at: temporary) }
+            }
+            let vocals = await Task.detached(priority: .utility) {
+                lyricsURL.flatMap { VocalTimeline(songID: id, lyricsURL: $0) }
             }.value
             guard let self, !Task.isCancelled, self.eventsSongID == id else { return }
             self.analysis = analysis

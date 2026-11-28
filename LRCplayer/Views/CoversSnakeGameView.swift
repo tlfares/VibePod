@@ -600,7 +600,7 @@ private final class CoversSnakePreviewPlayer {
         let startTime = CMTime(seconds: startSeconds, preferredTimescale: 600)
         let endTime = CMTime(seconds: startSeconds + clipLength, preferredTimescale: 600)
 
-        let player = AVPlayer(url: song.playableFileURL)
+        let player = AVPlayer(url: song.excerptURL)
         let songID = song.id
         self.player = player
         currentSongID = songID

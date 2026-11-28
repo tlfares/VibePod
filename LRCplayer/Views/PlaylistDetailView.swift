@@ -82,6 +82,7 @@ struct PlaylistDetailView: View {
                             libraryVM.togglePlaylistPin(id: playlist.id)
                         }
                     }
+                    DownloadMenuSection(songs: libraryVM.songs(in: playlist))
                     Section {
                         Button("Edit Playlist", systemImage: "pencil") {
                             libraryVM.requestEdit(ofPlaylist: playlist)
@@ -100,7 +101,7 @@ struct PlaylistDetailView: View {
                             }
                         }
                         filterMenu
-                        if playlist.importSource != nil {
+                        if playlist.importSource?.service == "spotify" {
                             Button("Refresh from Spotify", systemImage: "arrow.clockwise") {
                                 refresh(playlist)
                             }
@@ -169,6 +170,7 @@ struct PlaylistDetailView: View {
                     libraryVM.togglePlaylistPin(id: playlist.id)
                 }
             }
+            DownloadMenuSection(songs: libraryVM.songs(in: playlist))
             Section {
                 Button("Edit Autolist", systemImage: "slider.horizontal.3") {
                     libraryVM.requestEdit(of: playlist)
@@ -267,7 +269,9 @@ final class PlaylistDetailViewController: UITableViewController, SplitCollection
     private var filterMode = PlaylistFilterMode.off
     private var filterEntries: [PlaylistFilterEntry] = []
     private var filterIndex = 0
-    private var accentColor = UIColor(white: 0.16, alpha: 1)
+    private(set) var accentColor = UIColor(white: 0.16, alpha: 1) {
+        didSet { applyPageColor() }
+    }
     private var renderedToken: Int?
     private var cancellables = Set<AnyCancellable>()
     private static let addSongsCellID = "PlaylistAddSongsCell"
@@ -286,6 +290,7 @@ final class PlaylistDetailViewController: UITableViewController, SplitCollection
         fullScreenHeader.stretch = 0
         splitFilterTop.isActive = split
         tableView.topEdgeEffect.isHidden = false
+        applyPageColor()
         sizeHeader(force: true)
         if !split, isFullScreen { fullScreenHeader.followScroll(of: tableView) }
     }
@@ -414,7 +419,12 @@ final class PlaylistDetailViewController: UITableViewController, SplitCollection
         UIView.animate(withDuration: 0.25) { self.filterRow.alpha = editing ? 0.4 : 1 }
         // The "Add Songs" row hides while reordering.
         guard playlist?.isAutolist == false else { return }
+        // Only when it really changes: a swipe ending (or the table going
+        // away mid-swipe) also lands here, with the row already in place.
+        guard addRowHidden != editing else { return }
+        addRowHidden = editing
         let addRow = IndexPath(row: songs.count, section: 0)
+        guard tableView.window != nil else { tableView.reloadData(); return }
         if editing {
             tableView.deleteRows(at: [addRow], with: .fade)
         } else {
@@ -443,8 +453,7 @@ final class PlaylistDetailViewController: UITableViewController, SplitCollection
         accentColor = Self.accentColor(for: playlist, firstSong: songs.first)
         updateFilter(mode: filterMode)
 
-        view.backgroundColor = accentColor
-        tableView.backgroundColor = accentColor
+        applyPageColor()
         configureHeader()
         updateEmptyFooter()
         // The header column fits the title.
@@ -481,7 +490,9 @@ final class PlaylistDetailViewController: UITableViewController, SplitCollection
     }
 
     /// Manual playlists end with an "Add Songs" row; Autolists fill themselves.
-    private var showsAddRow: Bool { !isEditing && playlist?.isAutolist == false }
+    private var showsAddRow: Bool { !addRowHidden && playlist?.isAutolist == false }
+    /// Hidden while reordering (not during a row's swipe).
+    private var addRowHidden = false
 
     /// An empty Autolist says why, instead of showing a blank page.
     private func updateEmptyFooter() {
@@ -610,7 +621,19 @@ final class PlaylistDetailViewController: UITableViewController, SplitCollection
             lyricsBadge: LyricsBadge.image(for: song.lyricsKind),
             tint: .contentTint(from: accentColor)
         )
-        cell.backgroundColor = accentColor
+        cell.backgroundColor = rowColor
+    }
+
+    /// Split, the list starts on the artwork's blurred side: it lets it show
+    /// through, and the split controller paints the page color behind.
+    private var rowColor: UIColor { isSplit ? .clear : accentColor }
+
+    private func applyPageColor() {
+        guard isViewLoaded else { return }
+        view.backgroundColor = rowColor
+        tableView.backgroundColor = rowColor
+        for cell in tableView.visibleCells { cell.backgroundColor = rowColor }
+        if isSplit { parent?.view.backgroundColor = accentColor }
     }
 
     // MARK: Data source
@@ -632,7 +655,7 @@ final class PlaylistDetailViewController: UITableViewController, SplitCollection
             content.imageProperties.reservedLayoutSize = CGSize(width: 44, height: 44)
             content.imageToTextPadding = 12
             cell.contentConfiguration = content
-            cell.backgroundColor = accentColor
+            cell.backgroundColor = rowColor
             return cell
         }
         let cell = tableView.dequeueReusableCell(withIdentifier: SongTableCell.reuseID, for: indexPath) as! SongTableCell
@@ -655,13 +678,20 @@ final class PlaylistDetailViewController: UITableViewController, SplitCollection
     }
 
     override func tableView(_ tableView: UITableView, trailingSwipeActionsConfigurationForRowAt indexPath: IndexPath) -> UISwipeActionsConfiguration? {
-        guard let song = songs[safe: indexPath.row], let playlistID = playlist?.id, playlist?.isAutolist == false else { return nil }
+        guard let song = songs[safe: indexPath.row] else { return nil }
+        let swipe = SongMenuBuilder.swipeLeftAction(for: song, libraryVM: libraryVM, playerVM: playerVM, router: router, context: .list)
+        guard let playlistID = playlist?.id, playlist?.isAutolist == false else {
+            let configuration = UISwipeActionsConfiguration(actions: [swipe].compactMap { $0 })
+            configuration.performsFirstActionWithFullSwipe = true
+            return configuration
+        }
         let remove = UIContextualAction(style: .destructive, title: String(localized: "Remove")) { [weak self] _, _, completion in
             self?.libraryVM.removeFromPlaylist(songId: song.id, playlistId: playlistID)
             completion(true)
         }
         remove.image = UIImage(systemName: "minus.circle")
-        return UISwipeActionsConfiguration(actions: [remove])
+        // A full swipe still removes; the other action beside it.
+        return UISwipeActionsConfiguration(actions: [remove] + [swipe].compactMap { $0 })
     }
 
     override func tableView(_ tableView: UITableView, contextMenuConfigurationForRowAt indexPath: IndexPath, point: CGPoint) -> UIContextMenuConfiguration? {

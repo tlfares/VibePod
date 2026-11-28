@@ -28,6 +28,21 @@ enum ArtworkStore {
         return dir
     }()
 
+    /// How many times each song's cover was replaced since launch: part of
+    /// its cache key, so every surface draws the new cover instead of the
+    /// image it decoded before.
+    private nonisolated(unsafe) static var revisions: [UUID: Int] = [:]
+
+    /// Posted on the main thread with the `Set<UUID>` of songs whose cover
+    /// changed.
+    static let didChange = Notification.Name("ArtworkStoreDidChange")
+
+    static func revision(for id: UUID) -> Int {
+        lock.lock()
+        defer { lock.unlock() }
+        return revisions[id] ?? 0
+    }
+
     /// True once a legacy song with an embedded base64 artwork has been moved to
     /// disk. Used to trigger the one-time lightweight re-save of songs.json.
     private nonisolated(unsafe) static var didSpillLegacyData = false
@@ -82,17 +97,38 @@ enum ArtworkStore {
 
     /// A cover the user picked: replaces whatever was stored.
     static func replace(_ data: Data, for id: UUID) {
-        remove(for: id)
-        store(data, for: id)
+        replace(data, for: [id])
+    }
+
+    /// One cover for several songs (an album), announced once.
+    static func replace(_ data: Data, for ids: [UUID]) {
+        for id in ids {
+            discard(id)
+            store(data, for: id)
+        }
+        announce(ids)
     }
 
     static func remove(for id: UUID) {
+        discard(id)
+        announce([id])
+    }
+
+    private static func discard(_ id: UUID) {
         lock.lock()
         defer { lock.unlock() }
         cache.removeObject(forKey: id as NSUUID)
         missingIDs.insert(id)
+        revisions[id, default: 0] += 1
         try? FileManager.default.removeItem(at: fileURL(for: id))
         ArtworkImageCache.shared.removeImages(forKeyPrefix: id.uuidString)
+    }
+
+    private static func announce(_ ids: [UUID]) {
+        let changed = Set(ids)
+        DispatchQueue.main.async {
+            NotificationCenter.default.post(name: didChange, object: changed)
+        }
     }
 }
 
@@ -116,7 +152,8 @@ struct ArtworkSource: Hashable, @unchecked Sendable {
     fileprivate let kind: Kind
 
     static func song(_ id: UUID) -> ArtworkSource {
-        ArtworkSource(cacheKey: id.uuidString, kind: .song(id))
+        let revision = ArtworkStore.revision(for: id)
+        return ArtworkSource(cacheKey: revision == 0 ? id.uuidString : "\(id.uuidString)~\(revision)", kind: .song(id))
     }
 
     /// Artwork that only exists in memory (playlist covers). The data length is
@@ -131,7 +168,25 @@ struct ArtworkSource: Hashable, @unchecked Sendable {
     }
 
     static func mosaic(_ songIDs: [UUID]) -> ArtworkSource {
-        ArtworkSource(cacheKey: "mosaic-" + songIDs.map(\.uuidString).joined(separator: "-"), kind: .mosaic(songIDs))
+        ArtworkSource(cacheKey: "mosaic-" + songIDs.prefix(4).map { song($0).cacheKey }.joined(separator: "-"), kind: .mosaic(songIDs))
+    }
+
+    /// This artwork as stored now: a cover replaced since gets its new key.
+    var current: ArtworkSource {
+        switch kind {
+        case let .song(id): .song(id)
+        case let .mosaic(ids): .mosaic(ids)
+        case .data, .generated: self
+        }
+    }
+
+    /// Whether it draws the cover of one of these songs.
+    func shows(any ids: Set<UUID>) -> Bool {
+        switch kind {
+        case let .song(id): ids.contains(id)
+        case let .mosaic(songIDs): songIDs.prefix(4).contains(where: ids.contains)
+        case .data, .generated: false
+        }
     }
 
     /// Drawn at the displayed size, so it is never blurry; the key changes
@@ -294,6 +349,8 @@ struct ArtworkImage: View {
 
     @State private var image: UIImage?
     @State private var loadedKey: String?
+    /// Bumped when the cover drawn here is replaced.
+    @State private var coverChanges = 0
 
     init(source: ArtworkSource?, cornerRadius: CGFloat = 8, points: CGFloat = 160, placeholderSymbol: String = "music.note") {
         self.source = source
@@ -309,6 +366,9 @@ struct ArtworkImage: View {
     }
 
     var body: some View {
+        let _ = coverChanges
+        // A cover replaced since the parent built this view draws anew.
+        let source = self.source?.current
         let shape = RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
         // When the source changes on a live view (mini player, pager), use any
         // decode already in memory instead of flashing the placeholder.
@@ -342,6 +402,10 @@ struct ArtworkImage: View {
             image = decoded
             loadedKey = source.cacheKey
         }
+        .onReceive(NotificationCenter.default.publisher(for: ArtworkStore.didChange)) { note in
+            guard let ids = note.object as? Set<UUID>, self.source?.shows(any: ids) == true else { return }
+            coverChanges += 1
+        }
     }
 }
 
@@ -350,11 +414,33 @@ struct ArtworkImage: View {
 @MainActor
 final class ArtworkImageLoader {
     private var token: String?
+    /// What `load` was last asked, to draw again when that cover is replaced.
+    private var request: (source: ArtworkSource, points: CGFloat, placeholder: UIImage?)?
+    private weak var imageView: UIImageView?
+    nonisolated(unsafe) private var observer: NSObjectProtocol?
+
+    deinit {
+        if let observer { NotificationCenter.default.removeObserver(observer) }
+    }
+
+    private func observeCoverChanges() {
+        guard observer == nil else { return }
+        observer = NotificationCenter.default.addObserver(forName: ArtworkStore.didChange, object: nil, queue: .main) { [weak self] note in
+            guard let ids = note.object as? Set<UUID> else { return }
+            MainActor.assumeIsolated {
+                guard let self, let request = self.request, request.source.shows(any: ids), let imageView = self.imageView else { return }
+                self.load(request.source.current, into: imageView, points: request.points, placeholder: request.placeholder)
+            }
+        }
+    }
 
     /// Sets the image view's artwork, decoding off the main thread when the
     /// image isn't cached yet. Safe against cell reuse.
     func load(_ source: ArtworkSource?, into imageView: UIImageView, points: CGFloat, placeholder: UIImage? = nil) {
         token = source?.cacheKey
+        self.imageView = imageView
+        request = source.map { ($0, points, placeholder) }
+        if source != nil { observeCoverChanges() }
         func show(_ image: UIImage?) {
             // Symbols keep their natural size centered; covers fill the frame.
             if let image {
@@ -387,5 +473,6 @@ final class ArtworkImageLoader {
 
     func cancel() {
         token = nil
+        request = nil
     }
 }
